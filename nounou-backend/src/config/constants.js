@@ -33,15 +33,13 @@ module.exports = {
     MIN_PASSWORD_LENGTH: 8,
     MAX_PASSWORD_LENGTH: 128,
 
-    // Session management (AJOUTÉ ICI)
+    // Session management
     SESSION: {
       DEVICE_TYPES: ['mobile', 'tablet', 'web', 'desktop'],
       MAX_SESSIONS_PER_USER: 10,
       SESSION_CLEANUP_INTERVAL: 24 * 60 * 60 * 1000 // 24 hours
     }
   },
-
-  // Session management (SUPPRIMÉ D'ICI - maintenant sous USER.SESSION)
 
   // Nutrition constants
   NUTRITION: {
@@ -54,6 +52,36 @@ module.exports = {
     MAX_DAILY_CARBS: 1000, // grams
     MAX_DAILY_FAT: 300, // grams
     MAX_DAILY_WATER: 10000 // ml
+  },
+
+  // MongoDB specific constants
+  DATABASE: {
+    COLLECTIONS: {
+      USERS: 'users',
+      USER_SESSIONS: 'user_sessions',
+      USER_GOALS: 'user_goals',
+      CONSUMPTION_ENTRIES: 'consumption_entries',
+      DAILY_SUMMARIES: 'daily_summaries',
+      USER_KPIS: 'user_kpis',
+      USER_ACHIEVEMENTS: 'user_achievements',
+      ACHIEVEMENTS: 'achievements',
+      USER_STREAKS: 'user_streaks',
+      USER_INSIGHTS: 'user_insights',
+      WEEKLY_SUMMARIES: 'weekly_summaries',
+      MONTHLY_SUMMARIES: 'monthly_summaries'
+    },
+    
+    // MongoDB query options
+    DEFAULT_LIMIT: 50,
+    MAX_LIMIT: 1000,
+    DEFAULT_SORT: { createdAt: -1 },
+    
+    // Index settings
+    TEXT_SEARCH_WEIGHTS: {
+      name: 10,
+      description: 5,
+      tags: 3
+    }
   },
 
   // Error messages
@@ -71,9 +99,14 @@ module.exports = {
     INVALID_HEIGHT: 'Height must be between 100 and 250 cm',
     INVALID_WEIGHT: 'Weight must be between 30 and 300 kg',
     
+    // Database errors
+    DOCUMENT_NOT_FOUND: 'Document not found',
+    DUPLICATE_KEY_ERROR: 'Duplicate key error',
+    VALIDATION_ERROR: 'Validation error',
+    DATABASE_ERROR: 'Database operation failed',
+    
     // General
     USER_NOT_FOUND: 'User not found',
-    VALIDATION_ERROR: 'Validation error',
     INTERNAL_ERROR: 'Internal server error',
     RATE_LIMIT_EXCEEDED: 'Too many requests, please try again later'
   },
@@ -84,7 +117,10 @@ module.exports = {
     USER_UPDATED: 'User profile updated successfully',
     PASSWORD_CHANGED: 'Password changed successfully',
     LOGOUT_SUCCESS: 'Logged out successfully',
-    EMAIL_SENT: 'Email sent successfully'
+    EMAIL_SENT: 'Email sent successfully',
+    DOCUMENT_CREATED: 'Document created successfully',
+    DOCUMENT_UPDATED: 'Document updated successfully',
+    DOCUMENT_DELETED: 'Document deleted successfully'
   },
 
   // Regex patterns
@@ -92,6 +128,8 @@ module.exports = {
     EMAIL: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     PASSWORD: /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/,
     PHONE: /^\+?[\d\s\-\(\)]+$/,
+    // MongoDB ObjectId pattern
+    OBJECT_ID: /^[0-9a-fA-F]{24}$/,
     UUID: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   }
 };

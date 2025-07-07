@@ -1,79 +1,187 @@
-const { Pool } = require('pg');
+const mongoose = require('mongoose');
 const config = require('./env');
 
 class Database {
   constructor() {
-    this.pool = new Pool({
-      host: config.database.host,
-      port: config.database.port,
-      database: config.database.name,
-      user: config.database.user,
-      password: config.database.password,
-      ssl: config.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-      max: 20, // Maximum number of clients
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 2000,
+    this.connection = null;
+    this.isConnected = false;
+    
+    // MongoDB connection options
+    this.options = {
+      maxPoolSize: 20, // Maximum number of connections
+      serverSelectionTimeoutMS: 5000, // Keep trying to send operations for 5 seconds
+      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      family: 4, // Use IPv4
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      retryWrites: true,
+      w: 'majority'
+    };
+
+    this.setupEventListeners();
+  }
+
+  setupEventListeners() {
+    mongoose.connection.on('connected', () => {
+      console.log('🗄️  Connected to MongoDB database');
+      this.isConnected = true;
     });
 
-    this.pool.on('connect', () => {
-      console.log('🗄️  Connected to PostgreSQL database');
+    mongoose.connection.on('error', (err) => {
+      console.error('❌ MongoDB connection error:', err);
+      this.isConnected = false;
     });
 
-    this.pool.on('error', (err) => {
-      console.error('❌ PostgreSQL pool error:', err);
+    mongoose.connection.on('disconnected', () => {
+      console.log('🔌 MongoDB disconnected');
+      this.isConnected = false;
+    });
+
+    // Graceful shutdown
+    process.on('SIGINT', async () => {
+      try {
+        await mongoose.connection.close();
+        console.log('🔒 MongoDB connection closed through app termination');
+        process.exit(0);
+      } catch (error) {
+        console.error('❌ Error closing MongoDB connection:', error);
+        process.exit(1);
+      }
     });
   }
 
-  async query(text, params) {
+  async connect() {
+    try {
+      this.connection = await mongoose.connect(config.database.uri, this.options);
+      this.isConnected = true;
+      return this.connection;
+    } catch (error) {
+      console.error('❌ MongoDB connection failed:', error);
+      this.isConnected = false;
+      throw error;
+    }
+  }
+
+  // For backward compatibility with PostgreSQL query method
+  async query(operation, params = {}) {
     const start = Date.now();
     try {
-      const result = await this.pool.query(text, params);
+      // This is a compatibility layer - in practice, you'll use Mongoose models directly
+      // But keeping it for smooth migration
+      let result;
+      
+      if (typeof operation === 'function') {
+        result = await operation(params);
+      } else {
+        throw new Error('MongoDB query method requires a function (use Mongoose models directly)');
+      }
+      
       const duration = Date.now() - start;
       
       if (config.NODE_ENV === 'development') {
-        console.log('🔍 Query executed:', { text, duration: `${duration}ms`, rows: result.rowCount });
+        console.log('🔍 MongoDB operation executed:', { 
+          operation: operation.name || 'anonymous', 
+          duration: `${duration}ms`
+        });
       }
       
       return result;
     } catch (error) {
-      console.error('❌ Database query error:', error);
+      console.error('❌ MongoDB operation error:', error);
       throw error;
     }
   }
 
   async getClient() {
-    return await this.pool.connect();
+    // For MongoDB, return the mongoose connection
+    if (!this.isConnected) {
+      await this.connect();
+    }
+    return mongoose.connection;
   }
 
   async transaction(callback) {
-    const client = await this.getClient();
+    const session = await mongoose.startSession();
     try {
-      await client.query('BEGIN');
-      const result = await callback(client);
-      await client.query('COMMIT');
-      return result;
+      await session.withTransaction(async () => {
+        return await callback(session);
+      });
     } catch (error) {
-      await client.query('ROLLBACK');
+      console.error('❌ MongoDB transaction error:', error);
       throw error;
     } finally {
-      client.release();
+      await session.endSession();
     }
   }
 
   async testConnection() {
     try {
-      const result = await this.query('SELECT NOW() as current_time');
-      console.log('✅ Database connection successful:', result.rows[0].current_time);
+      if (!this.isConnected) {
+        await this.connect();
+      }
+      
+      // Test with a simple ping
+      const admin = mongoose.connection.db.admin();
+      const result = await admin.ping();
+      
+      console.log('✅ MongoDB connection successful:', {
+        status: 'connected',
+        database: mongoose.connection.name,
+        host: mongoose.connection.host,
+        port: mongoose.connection.port
+      });
+      
       return true;
     } catch (error) {
-      console.error('❌ Database connection failed:', error.message);
+      console.error('❌ MongoDB connection failed:', error.message);
       return false;
     }
   }
 
   async close() {
-    await this.pool.end();
-    console.log('🔒 Database connection pool closed');
+    try {
+      await mongoose.connection.close();
+      this.isConnected = false;
+      console.log('🔒 MongoDB connection closed');
+    } catch (error) {
+      console.error('❌ Error closing MongoDB connection:', error);
+      throw error;
+    }
+  }
+
+  // Additional MongoDB specific methods
+  getConnectionStatus() {
+    const states = {
+      0: 'disconnected',
+      1: 'connected',
+      2: 'connecting',
+      3: 'disconnecting'
+    };
+    
+    return {
+      state: states[mongoose.connection.readyState],
+      isConnected: this.isConnected,
+      database: mongoose.connection.name,
+      host: mongoose.connection.host,
+      port: mongoose.connection.port
+    };
+  }
+
+  async healthCheck() {
+    try {
+      const status = this.getConnectionStatus();
+      if (status.isConnected) {
+        await mongoose.connection.db.admin().ping();
+        return { status: 'healthy', ...status };
+      } else {
+        return { status: 'unhealthy', ...status };
+      }
+    } catch (error) {
+      return { 
+        status: 'error', 
+        error: error.message,
+        isConnected: false 
+      };
+    }
   }
 }
 

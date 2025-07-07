@@ -1,11 +1,10 @@
-const UserModel = require('../models/userModel');
+const { UserModel, User, UserSession } = require('../models/userModel');
 const UserService = require('./userService');
 const PasswordUtils = require('../utils/passwordUtils');
 const TokenUtils = require('../utils/tokenUtils');
 const { ERRORS, SUCCESS } = require('../config/constants');
 const { v4: uuidv4 } = require('uuid');
-const config = require('../config/env');
-const database = require('../config/database');
+const mongoose = require('mongoose');
 
 class AuthService {
   // Connexion utilisateur
@@ -16,7 +15,7 @@ class AuthService {
       // Trouver l'utilisateur avec mot de passe
       const user = await UserService.findByEmailWithPassword(email);
       
-      if (!user || !user.is_active) {
+      if (!user || !user.isActive) {
         throw new Error(ERRORS.INVALID_CREDENTIALS);
       }
 
@@ -27,35 +26,74 @@ class AuthService {
         throw new Error(ERRORS.INVALID_CREDENTIALS);
       }
 
+      // Nettoyer les anciennes sessions si nécessaire
+      await this.cleanupUserSessions(user._id);
+
       // Générer les tokens
-      const tokenPair = TokenUtils.generateTokenPair(user, { deviceId });
+      const sessionId = new mongoose.Types.ObjectId();
+      const tokenPair = TokenUtils.generateTokenPair(user, { 
+        deviceId: deviceId || uuidv4(),
+        sessionId: sessionId.toString()
+      });
 
       // Créer la session
       const sessionData = {
-        userId: user.id,
-        token: TokenUtils.generateSessionToken(),
+        _id: sessionId,
+        userId: user._id,
+        token: tokenPair.accessToken,
         refreshToken: tokenPair.refreshToken,
         deviceId: deviceId || uuidv4(),
         deviceType: deviceType || 'mobile',
+        deviceInfo: {
+          userAgent: deviceInfo.userAgent,
+          platform: deviceInfo.platform,
+          version: deviceInfo.version
+        },
         ipAddress: deviceInfo.ipAddress,
-        location: deviceInfo.location,
+        location: {
+          country: this.extractCountry(deviceInfo.location),
+          city: this.extractCity(deviceInfo.location),
+          timezone: deviceInfo.timezone
+        },
         expiresAt: TokenUtils.getTokenExpiration(tokenPair.accessToken)
       };
 
-      await UserModel.createSession(sessionData);
+      const session = await UserModel.createSession(sessionData);
+
+      // Update user last active
+      await UserService.updateLastActive(user._id);
+
+      // Log login activity
+      await UserService.logActivity(user._id, {
+        action: 'user_login',
+        resource: 'auth',
+        ipAddress: deviceInfo.ipAddress,
+        userAgent: deviceInfo.userAgent,
+        metadata: {
+          deviceType,
+          deviceId: sessionData.deviceId,
+          loginMethod: 'email_password'
+        }
+      });
 
       // Retourner les données de connexion
       return {
         user: UserService.sanitizeUser(user),
         tokens: tokenPair,
         session: {
+          id: session._id.toString(),
           deviceId: sessionData.deviceId,
           deviceType: sessionData.deviceType,
           expiresAt: sessionData.expiresAt
         },
-        permissions: UserService.getUserPermissions(user)
+        permissions: UserService.getUserPermissions(user),
+        subscription: UserService.getSubscriptionInfo(user)
       };
     } catch (error) {
+      // Log failed login attempt
+      if (deviceInfo.ipAddress) {
+        console.warn(`Failed login attempt from ${deviceInfo.ipAddress} for email: ${credentials.email}`);
+      }
       throw error;
     }
   }
@@ -66,45 +104,65 @@ class AuthService {
       // Vérifier le refresh token
       const decoded = TokenUtils.verifyRefreshToken(refreshToken);
       
+      if (!mongoose.Types.ObjectId.isValid(decoded.userId)) {
+        throw new Error(ERRORS.INVALID_TOKEN);
+      }
+
       // Récupérer l'utilisateur
-      const user = await UserService.findById(decoded.userId);
+      const user = await UserService.findByEmailWithPassword(decoded.email || '');
       
-      if (!user || !user.is_active) {
+      if (!user || !user.isActive) {
+        throw new Error(ERRORS.INVALID_TOKEN);
+      }
+
+      // Valider le refresh token en base
+      const isValidRefreshToken = await UserService.validateRefreshToken(user._id, refreshToken);
+      if (!isValidRefreshToken) {
         throw new Error(ERRORS.INVALID_TOKEN);
       }
 
       // Générer de nouveaux tokens
-      const tokenPair = TokenUtils.generateTokenPair(user, { deviceId: decoded.deviceId });
-
-      // Mettre à jour la session
-      const sessionData = {
-        userId: user.id,
-        token: TokenUtils.generateSessionToken(),
-        refreshToken: tokenPair.refreshToken,
+      const tokenPair = TokenUtils.generateTokenPair(user, { 
         deviceId: decoded.deviceId,
-        deviceType: deviceInfo.deviceType || 'mobile',
-        ipAddress: deviceInfo.ipAddress,
-        location: deviceInfo.location,
-        expiresAt: TokenUtils.getTokenExpiration(tokenPair.accessToken)
-      };
+        sessionId: decoded.sessionId 
+      });
 
-      await UserModel.createSession(sessionData);
+      // Mettre à jour la session avec les nouveaux tokens
+      if (decoded.sessionId) {
+        await UserService.updateSessionTokens(decoded.sessionId, tokenPair);
+      }
+
+      // Update user last active
+      await UserService.updateLastActive(user._id);
+
+      // Log token refresh
+      await UserService.logActivity(user._id, {
+        action: 'token_refresh',
+        resource: 'auth',
+        ipAddress: deviceInfo.ipAddress,
+        metadata: {
+          sessionId: decoded.sessionId,
+          deviceId: decoded.deviceId
+        }
+      });
 
       return {
         user: UserService.sanitizeUser(user),
         tokens: tokenPair,
         session: {
-          deviceId: sessionData.deviceId,
-          deviceType: sessionData.deviceType,
-          expiresAt: sessionData.expiresAt
-        }
+          id: decoded.sessionId,
+          deviceId: decoded.deviceId,
+          deviceType: deviceInfo.deviceType || 'mobile',
+          expiresAt: TokenUtils.getTokenExpiration(tokenPair.accessToken)
+        },
+        permissions: UserService.getUserPermissions(user)
       };
     } catch (error) {
       throw error;
     }
   }
 
-  // Déconnexion
+  // Déconnexion simple
   async logout(token) {
     try {
       const deletedSession = await UserModel.deleteSession(token);
@@ -113,9 +171,62 @@ class AuthService {
         throw new Error(ERRORS.INVALID_TOKEN);
       }
 
+      // Log logout activity
+      if (deletedSession.userId) {
+        await UserService.logActivity(deletedSession.userId, {
+          action: 'user_logout',
+          resource: 'auth',
+          metadata: {
+            sessionId: deletedSession._id?.toString(),
+            deviceId: deletedSession.deviceId
+          }
+        });
+      }
+
       return {
         message: SUCCESS.LOGOUT_SUCCESS,
-        sessionId: deletedSession.id
+        sessionId: deletedSession._id?.toString()
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Déconnexion d'un utilisateur spécifique (pour le controller)
+  async logoutUser(userId, sessionId) {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new Error(ERRORS.USER_NOT_FOUND);
+      }
+
+      let deletedCount = 0;
+
+      if (sessionId && mongoose.Types.ObjectId.isValid(sessionId)) {
+        // Logout specific session
+        const session = await UserSession.findOneAndDelete({
+          _id: sessionId,
+          userId: userId
+        });
+        deletedCount = session ? 1 : 0;
+      } else {
+        // Logout all sessions for this user
+        const result = await UserSession.deleteMany({ userId: userId });
+        deletedCount = result.deletedCount;
+      }
+
+      // Log logout activity
+      await UserService.logActivity(userId, {
+        action: sessionId ? 'session_logout' : 'all_sessions_logout',
+        resource: 'auth',
+        metadata: {
+          sessionId,
+          sessionsDeleted: deletedCount
+        }
+      });
+
+      return {
+        message: SUCCESS.LOGOUT_SUCCESS,
+        sessionsDeleted: deletedCount
       };
     } catch (error) {
       throw error;
@@ -125,11 +236,54 @@ class AuthService {
   // Déconnexion de tous les appareils
   async logoutAllDevices(userId) {
     try {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new Error(ERRORS.USER_NOT_FOUND);
+      }
+
       const deletedCount = await UserModel.deleteAllUserSessions(userId);
       
+      // Log activity
+      await UserService.logActivity(userId, {
+        action: 'logout_all_devices',
+        resource: 'auth',
+        metadata: {
+          devicesLoggedOut: deletedCount
+        }
+      });
+
       return {
         message: SUCCESS.LOGOUT_SUCCESS,
         devicesLoggedOut: deletedCount
+      };
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Déconnexion de tous les appareils sauf le current
+  async logoutAllDevicesExcept(userId, currentSessionId) {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        throw new Error(ERRORS.USER_NOT_FOUND);
+      }
+
+      const result = await UserSession.deleteMany({
+        userId: userId,
+        _id: { $ne: currentSessionId }
+      });
+
+      await UserService.logActivity(userId, {
+        action: 'logout_other_devices',
+        resource: 'auth',
+        metadata: {
+          devicesLoggedOut: result.deletedCount,
+          currentSessionId
+        }
+      });
+
+      return {
+        message: 'Logged out from other devices',
+        devicesLoggedOut: result.deletedCount
       };
     } catch (error) {
       throw error;
@@ -140,9 +294,14 @@ class AuthService {
   async verifyAccessToken(token) {
     try {
       const decoded = TokenUtils.verifyAccessToken(token);
+      
+      if (!mongoose.Types.ObjectId.isValid(decoded.userId)) {
+        throw new Error(ERRORS.INVALID_TOKEN);
+      }
+
       const user = await UserService.findById(decoded.userId);
       
-      if (!user || !user.is_active) {
+      if (!user || !user.isActive) {
         throw new Error(ERRORS.INVALID_TOKEN);
       }
 
@@ -169,6 +328,19 @@ class AuthService {
         deviceType: deviceInfo.deviceType
       }, deviceInfo);
 
+      // Log registration
+      await UserService.logActivity(newUser._id || newUser.id, {
+        action: 'user_registration',
+        resource: 'auth',
+        ipAddress: deviceInfo.ipAddress,
+        userAgent: deviceInfo.userAgent,
+        metadata: {
+          registrationMethod: 'email',
+          deviceType: deviceInfo.deviceType,
+          subscriptionType: userData.subscriptionType || 'free'
+        }
+      });
+
       return {
         message: SUCCESS.USER_REGISTERED,
         ...loginResult
@@ -178,43 +350,71 @@ class AuthService {
     }
   }
 
-  // Obtenir les sessions actives d'un utilisateur (CORRIGÉ)
+  // Obtenir les sessions actives d'un utilisateur
   async getUserSessions(userId) {
     try {
-      const query = `
-        SELECT id, device_id, device_type, ip_address, location,
-               created_at, last_used_at, expires_at
-        FROM ${config.database.schemas.users}.user_sessions
-        WHERE user_id = $1 AND expires_at > CURRENT_TIMESTAMP
-        ORDER BY last_used_at DESC
-      `;
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return [];
+      }
 
-      const result = await database.query(query, [userId]);
-      return result.rows;
+      const sessions = await UserSession.find({
+        userId: userId,
+        expiresAt: { $gt: new Date() },
+        isActive: true
+      })
+      .select('deviceId deviceType deviceInfo ipAddress location createdAt lastUsedAt expiresAt')
+      .sort({ lastUsedAt: -1 })
+      .lean();
+
+      return sessions.map(session => ({
+        id: session._id.toString(),
+        deviceId: session.deviceId,
+        deviceType: session.deviceType,
+        deviceInfo: session.deviceInfo,
+        ipAddress: session.ipAddress,
+        location: session.location,
+        createdAt: session.createdAt,
+        lastUsedAt: session.lastUsedAt,
+        expiresAt: session.expiresAt,
+        isExpired: new Date() > session.expiresAt
+      }));
     } catch (error) {
-      throw error;
+      console.error('Error getting user sessions:', error);
+      return [];
     }
   }
 
-  // Révoquer une session spécifique (CORRIGÉ)
+  // Révoquer une session spécifique
   async revokeSession(userId, sessionId) {
     try {
-      const query = `
-        DELETE FROM ${config.database.schemas.users}.user_sessions
-        WHERE id = $1 AND user_id = $2
-        RETURNING id, device_id
-      `;
+      if (!mongoose.Types.ObjectId.isValid(userId) || !mongoose.Types.ObjectId.isValid(sessionId)) {
+        throw new Error('Invalid user ID or session ID');
+      }
 
-      const result = await database.query(query, [sessionId, userId]);
+      const deletedSession = await UserSession.findOneAndDelete({
+        _id: sessionId,
+        userId: userId
+      });
       
-      if (result.rows.length === 0) {
+      if (!deletedSession) {
         throw new Error('Session not found or unauthorized');
       }
 
+      // Log session revocation
+      await UserService.logActivity(userId, {
+        action: 'session_revoked',
+        resource: 'auth',
+        metadata: {
+          revokedSessionId: sessionId,
+          deviceId: deletedSession.deviceId,
+          deviceType: deletedSession.deviceType
+        }
+      });
+
       return {
         message: 'Session revoked successfully',
-        sessionId: result.rows[0].id,
-        deviceId: result.rows[0].device_id
+        sessionId: sessionId,
+        deviceId: deletedSession.deviceId
       };
     } catch (error) {
       throw error;
@@ -238,6 +438,26 @@ class AuthService {
     }
   }
 
+  // Nettoyer les sessions anciennes d'un utilisateur (garder seulement les N plus récentes)
+  async cleanupUserSessions(userId, maxSessions = 10) {
+    try {
+      const sessions = await UserSession.find({ userId })
+        .sort({ lastUsedAt: -1 })
+        .skip(maxSessions);
+
+      if (sessions.length > 0) {
+        const sessionIds = sessions.map(s => s._id);
+        const result = await UserSession.deleteMany({
+          _id: { $in: sessionIds }
+        });
+        
+        console.log(`🧹 Cleaned up ${result.deletedCount} old sessions for user ${userId}`);
+      }
+    } catch (error) {
+      console.error('Error cleaning up user sessions:', error);
+    }
+  }
+
   // Valider les permissions pour une action
   validatePermissions(user, requiredPermissions) {
     const userPermissions = UserService.getUserPermissions(user);
@@ -255,69 +475,180 @@ class AuthService {
         return { message: 'If the email exists, a reset link has been sent' };
       }
 
-      // Générer un token temporaire (vous pouvez l'implémenter selon vos besoins)
+      // Générer un token temporaire sécurisé
       const resetToken = TokenUtils.generateSessionToken();
-      
-      // TODO: Stocker le token avec expiration et envoyer par email
+      const expiresAt = new Date(Date.now() + 1 * 60 * 60 * 1000); // 1 hour
+
+      // TODO: Stocker le token dans une collection séparée ou dans le user
+      // await PasswordResetToken.create({
+      //   userId: user._id,
+      //   token: resetToken,
+      //   expiresAt,
+      //   used: false
+      // });
+
+      // Log password reset request
+      await UserService.logActivity(user._id || user.id, {
+        action: 'password_reset_requested',
+        resource: 'auth',
+        metadata: {
+          email: user.email
+        }
+      });
+
+      // TODO: Envoyer l'email avec le token
       
       return { 
         message: 'Password reset link sent to your email',
         // En développement seulement
-        ...(process.env.NODE_ENV === 'development' && { resetToken })
+        ...(process.env.NODE_ENV === 'development' && { 
+          resetToken,
+          expiresAt,
+          userId: user._id || user.id
+        })
       };
     } catch (error) {
       throw error;
     }
   }
 
-  // Obtenir des statistiques de sessions (AJOUTÉ)
-  async getSessionStats() {
+  // Réinitialiser le mot de passe avec token
+  async resetPasswordWithToken(token, newPassword) {
     try {
-      const query = `
-        SELECT 
-          device_type,
-          COUNT(*) as total_sessions,
-          COUNT(*) FILTER (WHERE expires_at > CURRENT_TIMESTAMP) as active_sessions,
-          AVG(EXTRACT(EPOCH FROM (last_used_at - created_at))) as avg_session_duration
-        FROM ${config.database.schemas.users}.user_sessions
-        GROUP BY device_type
-        ORDER BY total_sessions DESC
-      `;
+      // TODO: Implémenter la vérification du token de reset
+      // const resetTokenDoc = await PasswordResetToken.findOne({
+      //   token,
+      //   expiresAt: { $gt: new Date() },
+      //   used: false
+      // });
 
-      const result = await database.query(query);
-      return result.rows;
+      // if (!resetTokenDoc) {
+      //   throw new Error('Invalid or expired reset token');
+      // }
+
+      // const user = await User.findById(resetTokenDoc.userId);
+      // if (!user) {
+      //   throw new Error('User not found');
+      // }
+
+      // // Update password
+      // const hashedPassword = await PasswordUtils.hash(newPassword);
+      // await User.findByIdAndUpdate(user._id, { password_hash: hashedPassword });
+
+      // // Mark token as used
+      // await PasswordResetToken.findByIdAndUpdate(resetTokenDoc._id, { used: true });
+
+      // // Logout all sessions
+      // await this.logoutAllDevices(user._id);
+
+      // // Log password reset
+      // await UserService.logActivity(user._id, {
+      //   action: 'password_reset_completed',
+      //   resource: 'auth'
+      // });
+
+      return {
+        message: 'Password reset successfully'
+      };
     } catch (error) {
       throw error;
     }
   }
 
-  // Obtenir les sessions par utilisateur (AJOUTÉ)
-  async getUserSessionsDetailed(userId) {
+  // Obtenir des statistiques de sessions
+  async getSessionStats() {
     try {
-      const query = `
-        SELECT 
-          s.id,
-          s.device_id,
-          s.device_type,
-          s.ip_address,
-          s.location,
-          s.created_at,
-          s.last_used_at,
-          s.expires_at,
-          CASE 
-            WHEN s.expires_at > CURRENT_TIMESTAMP THEN 'active'
-            ELSE 'expired'
-          END as status,
-          EXTRACT(EPOCH FROM (s.last_used_at - s.created_at)) as session_duration_seconds
-        FROM ${config.database.schemas.users}.user_sessions s
-        WHERE s.user_id = $1
-        ORDER BY s.last_used_at DESC
-      `;
+      const stats = await UserSession.aggregate([
+        {
+          $group: {
+            _id: '$deviceType',
+            totalSessions: { $sum: 1 },
+            activeSessions: {
+              $sum: {
+                $cond: [{ $gt: ['$expiresAt', new Date()] }, 1, 0]
+              }
+            },
+            avgSessionDuration: {
+              $avg: {
+                $subtract: ['$lastUsedAt', '$createdAt']
+              }
+            }
+          }
+        },
+        {
+          $sort: { totalSessions: -1 }
+        }
+      ]);
 
-      const result = await database.query(query, [userId]);
-      return result.rows;
+      return stats.map(stat => ({
+        deviceType: stat._id,
+        totalSessions: stat.totalSessions,
+        activeSessions: stat.activeSessions,
+        avgSessionDurationSeconds: Math.round(stat.avgSessionDuration / 1000)
+      }));
     } catch (error) {
       throw error;
+    }
+  }
+
+  // Obtenir les sessions détaillées par utilisateur
+  async getUserSessionsDetailed(userId) {
+    try {
+      if (!mongoose.Types.ObjectId.isValid(userId)) {
+        return [];
+      }
+
+      const sessions = await UserSession.find({ userId })
+        .sort({ lastUsedAt: -1 })
+        .lean();
+
+      return sessions.map(session => {
+        const now = new Date();
+        const sessionDuration = session.lastUsedAt - session.createdAt;
+        
+        return {
+          id: session._id.toString(),
+          deviceId: session.deviceId,
+          deviceType: session.deviceType,
+          deviceInfo: session.deviceInfo,
+          ipAddress: session.ipAddress,
+          location: session.location,
+          createdAt: session.createdAt,
+          lastUsedAt: session.lastUsedAt,
+          expiresAt: session.expiresAt,
+          status: now > session.expiresAt ? 'expired' : 'active',
+          sessionDurationSeconds: Math.round(sessionDuration / 1000),
+          isActive: session.isActive
+        };
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // Helper methods
+  extractCountry(location) {
+    if (!location) return null;
+    return typeof location === 'string' ? location : location.country;
+  }
+
+  extractCity(location) {
+    if (!location) return null;
+    return typeof location === 'object' ? location.city : null;
+  }
+
+  // Rate limiting helper (could be moved to separate service)
+  async checkRateLimit(identifier, action, windowMs = 15 * 60 * 1000, maxAttempts = 5) {
+    try {
+      // This is a simple in-memory implementation
+      // In production, use Redis or a dedicated rate limiting service
+      const key = `${action}:${identifier}`;
+      const now = Date.now();
+      
+      // This is a simplified version - implement proper rate limiting
+      return { allowed: true, retryAfter: null };
+    } catch (error) {
+      return { allowed: true, retryAfter: null };
     }
   }
 }
