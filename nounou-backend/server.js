@@ -74,14 +74,92 @@ async function startServer() {
       
       // Display available endpoints
       console.log('📋 Available Endpoints:');
+      
+      // GENERAL
       console.log(`   GET  /health`);
+      console.log(`   GET  /api/docs`);
+      console.log('');
+      
+      // ENDPOINTS USERS
+      console.log('👤 Users Module:');
       console.log(`   GET  /api/v1/users/health`);
       console.log(`   POST /api/v1/users/register`);
       console.log(`   POST /api/v1/users/login`);
+      console.log(`   GET  /api/v1/users/profile`);
+      console.log(`   PUT  /api/v1/users/profile`);
+      console.log(`   POST /api/v1/users/logout`);
+      console.log(`   GET  /api/v1/users/sessions`);
+      console.log(`   GET  /api/v1/users/goals`);
+      console.log(`   POST /api/v1/users/goals`);
+      console.log('');
+      
+      // ENDPOINTS CONSUMPTION
+      console.log('📊 Consumption Module:');
       console.log(`   GET  /api/v1/consumption/health`);
       console.log(`   POST /api/v1/consumption/entries`);
+      console.log(`   GET  /api/v1/consumption/entries`);
       console.log(`   GET  /api/v1/consumption/dashboard`);
+      console.log(`   GET  /api/v1/consumption/stats/today`);
+      console.log(`   POST /api/v1/consumption/meals/quick`);
+      console.log(`   GET  /api/v1/consumption/export`);
       console.log('');
+      
+      // ENDPOINTS FOODS
+      console.log('🍎 Foods Module:');
+      console.log(`   POST /api/v1/foods`);
+      console.log(`   GET  /api/v1/foods`);
+      console.log(`   GET  /api/v1/foods/search`);
+      console.log(`   GET  /api/v1/foods/barcode/:barcode`);
+      console.log(`   GET  /api/v1/foods/:foodId`);
+      console.log(`   PUT  /api/v1/foods/:foodId`);
+      console.log(`   DELETE /api/v1/foods/:foodId`);
+      console.log(`   POST /api/v1/foods/categories`);
+      console.log(`   GET  /api/v1/foods/categories`);
+      console.log(`   GET  /api/v1/foods/categories/tree`);
+      console.log('');
+      
+      // ✨ NOUVEAU - ENDPOINTS RECIPES
+      console.log('🍳 Recipes Module:');
+      console.log(`   GET  /api/v1/recipes`);
+      console.log(`   POST /api/v1/recipes`);
+      console.log(`   GET  /api/v1/recipes/search`);
+      console.log(`   GET  /api/v1/recipes/my-recipes`);
+      console.log(`   GET  /api/v1/recipes/public`);
+      console.log(`   POST /api/v1/recipes/complete`);
+      console.log(`   GET  /api/v1/recipes/:recipeId`);
+      console.log(`   PUT  /api/v1/recipes/:recipeId`);
+      console.log(`   DELETE /api/v1/recipes/:recipeId`);
+      console.log(`   GET  /api/v1/recipes/:recipeId/nutrition`);
+      console.log('');
+      
+      console.log('🥕 Recipe Ingredients:');
+      console.log(`   GET  /api/v1/recipes/:recipeId/ingredients`);
+      console.log(`   POST /api/v1/recipes/:recipeId/ingredients`);
+      console.log(`   PUT  /api/v1/recipes/ingredients/:ingredientId`);
+      console.log(`   DELETE /api/v1/recipes/ingredients/:ingredientId`);
+      console.log('');
+      
+      console.log('📋 Recipe Instructions:');
+      console.log(`   POST /api/v1/recipes/:recipeId/instructions`);
+      console.log(`   PUT  /api/v1/recipes/instructions/:instructionId`);
+      console.log(`   DELETE /api/v1/recipes/instructions/:instructionId`);
+      console.log('');
+      
+      console.log('📂 Recipe Categories:');
+      console.log(`   GET  /api/v1/recipes/categories`);
+      console.log(`   POST /api/v1/recipes/categories`);
+      console.log(`   GET  /api/v1/recipes/categories/search`);
+      console.log(`   GET  /api/v1/recipes/categories/roots`);
+      console.log(`   GET  /api/v1/recipes/categories/stats`);
+      console.log(`   GET  /api/v1/recipes/categories/:categoryId`);
+      console.log(`   PUT  /api/v1/recipes/categories/:categoryId`);
+      console.log(`   DELETE /api/v1/recipes/categories/:categoryId`);
+      console.log(`   GET  /api/v1/recipes/categories/:categoryId/breadcrumb`);
+      console.log(`   GET  /api/v1/recipes/categories/:categoryId/stats`);
+      console.log('');
+      
+      console.log('🎉 All modules loaded successfully!');
+      console.log('========================================\n');
     });
     
     // Store server reference for graceful shutdown

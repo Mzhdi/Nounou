@@ -16,6 +16,8 @@ const { rateLimiter } = require('./middleware/rateLimiter');
 // Import routes
 const userRoutes = require('./routes/userRoutes');
 const consumptionRoutes = require('./routes/consumptionRoutes');
+const foodRoutes = require('./routes/foodRoutes');
+const recipeRoutes = require('./routes/recipeRoutes'); // ✨ NOUVEAU
 
 // Create Express application
 const app = express();
@@ -191,6 +193,8 @@ app.get('/', (req, res) => {
       health: '/health',
       users: '/api/v1/users',
       consumption: '/api/v1/consumption',
+      foods: '/api/v1/foods',
+      recipes: '/api/v1/recipes', // ✨ NOUVEAU
       docs: '/api/docs'
     }
   });
@@ -203,6 +207,8 @@ const API_VERSION = config.API_VERSION || 'v1';
 
 app.use(`/api/${API_VERSION}/users`, userRoutes);
 app.use(`/api/${API_VERSION}/consumption`, consumptionRoutes);
+app.use(`/api/${API_VERSION}/foods`, foodRoutes);
+app.use(`/api/${API_VERSION}/recipes`, recipeRoutes); // ✨ NOUVEAU
 
 // API documentation endpoint (placeholder)
 app.get('/api/docs', (req, res) => {
@@ -228,6 +234,44 @@ app.get('/api/docs', (req, res) => {
         'GET /consumption/stats/today': 'Get today\'s stats',
         'POST /consumption/meals/quick': 'Add quick meal',
         'GET /consumption/export': 'Export consumption data'
+      },
+      foods: {
+        'POST /foods': 'Create new food item',
+        'GET /foods': 'List foods with filters',
+        'GET /foods/search': 'Search foods by text',
+        'GET /foods/barcode/:barcode': 'Get food by barcode',
+        'GET /foods/:foodId': 'Get food details',
+        'PUT /foods/:foodId': 'Update food',
+        'DELETE /foods/:foodId': 'Delete food (soft)',
+        'GET /foods/categories': 'List food categories',
+        'GET /foods/categories/tree': 'Category hierarchy'
+      },
+      // ✨ NOUVEAU - Documentation Recipes
+      recipes: {
+        'GET /recipes': 'List recipes with filters',
+        'POST /recipes': 'Create new recipe',
+        'GET /recipes/search': 'Search recipes by text',
+        'GET /recipes/my-recipes': 'Get user\'s recipes',
+        'GET /recipes/public': 'Get public recipes',
+        'POST /recipes/complete': 'Create complete recipe',
+        'GET /recipes/:recipeId': 'Get recipe details',
+        'PUT /recipes/:recipeId': 'Update recipe',
+        'DELETE /recipes/:recipeId': 'Delete recipe',
+        'GET /recipes/:recipeId/nutrition': 'Get recipe nutrition',
+        'GET /recipes/:recipeId/ingredients': 'Get recipe ingredients',
+        'POST /recipes/:recipeId/ingredients': 'Add ingredient to recipe',
+        'PUT /recipes/ingredients/:ingredientId': 'Update recipe ingredient',
+        'DELETE /recipes/ingredients/:ingredientId': 'Remove recipe ingredient',
+        'POST /recipes/:recipeId/instructions': 'Add instruction to recipe',
+        'PUT /recipes/instructions/:instructionId': 'Update recipe instruction',
+        'DELETE /recipes/instructions/:instructionId': 'Remove recipe instruction',
+        'GET /recipes/categories': 'List recipe categories',
+        'POST /recipes/categories': 'Create recipe category',
+        'GET /recipes/categories/:categoryId': 'Get recipe category',
+        'PUT /recipes/categories/:categoryId': 'Update recipe category',
+        'DELETE /recipes/categories/:categoryId': 'Delete recipe category',
+        'GET /recipes/categories/:categoryId/breadcrumb': 'Get category breadcrumb',
+        'GET /recipes/categories/:categoryId/stats': 'Get category statistics'
       }
     }
   });
