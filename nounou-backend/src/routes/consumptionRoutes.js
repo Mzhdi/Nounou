@@ -3,7 +3,7 @@ const router = express.Router();
 
 const ConsumptionController = require('../controllers/consumptionController');
 const AuthMiddleware = require('../middleware/auth');
-const ValidationMiddleware = require('../middleware/validation');
+const ValidationMiddleware = require('../middleware/consumptionValidation');
 const rateLimiter = require('../middleware/rateLimiter');
 
 // Apply authentication to all routes
