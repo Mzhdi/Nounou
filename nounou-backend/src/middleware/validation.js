@@ -205,6 +205,458 @@ class ValidationMiddleware {
     next();
   }
 
+  // ====== MISSING CONSUMPTION VALIDATION METHODS ======
+
+  static validateFoodEntry(req, res, next) {
+    const { itemId, foodId, quantity, unit, mealType } = req.body;
+
+    // Support both new format (itemId) and legacy format (foodId)
+    const actualFoodId = itemId || foodId;
+    
+    if (!actualFoodId) {
+      return ApiResponse.error(res, 'Food ID (itemId or foodId) is required', 400);
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(actualFoodId)) {
+      return ApiResponse.error(res, 'Invalid food ID format', 400);
+    }
+
+    if (!quantity || isNaN(quantity) || parseFloat(quantity) <= 0) {
+      return ApiResponse.error(res, 'Valid quantity is required and must be positive', 400);
+    }
+
+    const validUnits = ['g', 'kg', 'ml', 'l', 'cup', 'tbsp', 'tsp', 'oz', 'lb', 'piece'];
+    if (unit && !validUnits.includes(unit)) {
+      return ApiResponse.error(res, `Invalid unit. Allowed: ${validUnits.join(', ')}`, 400);
+    }
+
+    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+    if (mealType && !validMealTypes.includes(mealType)) {
+      return ApiResponse.error(res, `Invalid meal type. Allowed: ${validMealTypes.join(', ')}`, 400);
+    }
+
+    req.validatedData = {
+      itemType: 'food',
+      itemId: actualFoodId,
+      quantity: parseFloat(quantity),
+      unit: unit || 'g',
+      mealType: mealType || 'other',
+      ...req.body
+    };
+
+    next();
+  }
+
+  static validateRecipeEntry(req, res, next) {
+    const { itemId, recipeId, servings, mealType } = req.body;
+
+    // Support both new format (itemId) and legacy format (recipeId)
+    const actualRecipeId = itemId || recipeId;
+    
+    if (!actualRecipeId) {
+      return ApiResponse.error(res, 'Recipe ID (itemId or recipeId) is required', 400);
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(actualRecipeId)) {
+      return ApiResponse.error(res, 'Invalid recipe ID format', 400);
+    }
+
+    if (!servings || isNaN(servings) || parseFloat(servings) <= 0) {
+      return ApiResponse.error(res, 'Valid servings is required and must be positive', 400);
+    }
+
+    if (parseFloat(servings) > 10) {
+      return ApiResponse.error(res, 'Servings cannot exceed 10', 400);
+    }
+
+    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+    if (mealType && !validMealTypes.includes(mealType)) {
+      return ApiResponse.error(res, `Invalid meal type. Allowed: ${validMealTypes.join(', ')}`, 400);
+    }
+
+    req.validatedData = {
+      itemType: 'recipe',
+      itemId: actualRecipeId,
+      servings: parseFloat(servings),
+      mealType: mealType || 'other',
+      ...req.body
+    };
+
+    next();
+  }
+
+  static validateRecipeMeal(req, res, next) {
+    const { servings, mealType, notes, includeIngredients } = req.body;
+
+    if (!servings || isNaN(servings) || parseFloat(servings) <= 0) {
+      return ApiResponse.error(res, 'Valid servings is required and must be positive', 400);
+    }
+
+    if (parseFloat(servings) > 10) {
+      return ApiResponse.error(res, 'Servings cannot exceed 10', 400);
+    }
+
+    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+    if (mealType && !validMealTypes.includes(mealType)) {
+      return ApiResponse.error(res, `Invalid meal type. Allowed: ${validMealTypes.join(', ')}`, 400);
+    }
+
+    if (notes && typeof notes !== 'string') {
+      return ApiResponse.error(res, 'Notes must be a string', 400);
+    }
+
+    if (notes && notes.length > 500) {
+      return ApiResponse.error(res, 'Notes cannot exceed 500 characters', 400);
+    }
+
+    req.validatedData = {
+      servings: parseFloat(servings),
+      mealType: mealType || 'other',
+      notes: notes ? notes.trim() : undefined,
+      includeIngredients: includeIngredients === true,
+      ...req.body
+    };
+
+    next();
+  }
+
+  static validateTextSearch(req, res, next) {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string') {
+      return ApiResponse.error(res, 'Search query (q) is required and must be a string', 400);
+    }
+
+    if (q.length < 2) {
+      return ApiResponse.error(res, 'Search query must be at least 2 characters', 400);
+    }
+
+    if (q.length > 100) {
+      return ApiResponse.error(res, 'Search query cannot exceed 100 characters', 400);
+    }
+
+    req.validatedQuery = {
+      ...req.validatedQuery,
+      search: q.trim()
+    };
+
+    next();
+  }
+
+  static validateDashboardParams(req, res, next) {
+    const { period, includeComparison, includeGoals, includeInsights, weekOffset, monthOffset } = req.query;
+
+    const validPeriods = ['today', 'week', 'month', 'year'];
+    if (period && !validPeriods.includes(period)) {
+      return ApiResponse.error(res, `Invalid period. Allowed: ${validPeriods.join(', ')}`, 400);
+    }
+
+    if (weekOffset && (isNaN(weekOffset) || parseInt(weekOffset) < -52 || parseInt(weekOffset) > 52)) {
+      return ApiResponse.error(res, 'Week offset must be between -52 and 52', 400);
+    }
+
+    if (monthOffset && (isNaN(monthOffset) || parseInt(monthOffset) < -12 || parseInt(monthOffset) > 12)) {
+      return ApiResponse.error(res, 'Month offset must be between -12 and 12', 400);
+    }
+
+    req.validatedQuery = {
+      ...req.validatedQuery,
+      period: period || 'today',
+      includeComparison: includeComparison === 'true',
+      includeGoals: includeGoals !== 'false',
+      includeInsights: includeInsights === 'true',
+      weekOffset: weekOffset ? parseInt(weekOffset) : 0,
+      monthOffset: monthOffset ? parseInt(monthOffset) : 0
+    };
+
+    next();
+  }
+
+  static validateStatsParams(req, res, next) {
+    const { limit, period, itemType, mealType } = req.query;
+
+    if (limit && (isNaN(limit) || parseInt(limit) < 1 || parseInt(limit) > 50)) {
+      return ApiResponse.error(res, 'Limit must be between 1 and 50', 400);
+    }
+
+    const validPeriods = ['today', 'week', 'month', 'year'];
+    if (period && !validPeriods.includes(period)) {
+      return ApiResponse.error(res, `Invalid period. Allowed: ${validPeriods.join(', ')}`, 400);
+    }
+
+    const validItemTypes = ['food', 'recipe'];
+    if (itemType && !validItemTypes.includes(itemType)) {
+      return ApiResponse.error(res, `Invalid item type. Allowed: ${validItemTypes.join(', ')}`, 400);
+    }
+
+    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+    if (mealType && !validMealTypes.includes(mealType)) {
+      return ApiResponse.error(res, `Invalid meal type. Allowed: ${validMealTypes.join(', ')}`, 400);
+    }
+
+    req.validatedQuery = {
+      ...req.validatedQuery,
+      limit: limit ? parseInt(limit) : 10,
+      period: period || 'month',
+      itemType,
+      mealType
+    };
+
+    next();
+  }
+
+  static validateSuggestionParams(req, res, next) {
+    const { mealType, limit, basedOn, timeOfDay } = req.query;
+
+    const validMealTypes = ['breakfast', 'lunch', 'dinner', 'snack', 'other'];
+    if (mealType && !validMealTypes.includes(mealType)) {
+      return ApiResponse.error(res, `Invalid meal type. Allowed: ${validMealTypes.join(', ')}`, 400);
+    }
+
+    if (limit && (isNaN(limit) || parseInt(limit) < 1 || parseInt(limit) > 20)) {
+      return ApiResponse.error(res, 'Limit must be between 1 and 20', 400);
+    }
+
+    const validBasedOn = ['history', 'goals', 'ingredients'];
+    if (basedOn && !validBasedOn.includes(basedOn)) {
+      return ApiResponse.error(res, `Invalid basedOn. Allowed: ${validBasedOn.join(', ')}`, 400);
+    }
+
+    req.validatedQuery = {
+      ...req.validatedQuery,
+      mealType,
+      limit: limit ? parseInt(limit) : 10,
+      basedOn: basedOn || 'history',
+      timeOfDay
+    };
+
+    next();
+  }
+
+  static validateNutrientAnalysis(req, res, next) {
+    const { targetNutrients, period } = req.body;
+
+    if (targetNutrients && !Array.isArray(targetNutrients)) {
+      return ApiResponse.error(res, 'Target nutrients must be an array', 400);
+    }
+
+    const validNutrients = ['protein', 'carbs', 'fat', 'fiber', 'calcium', 'iron', 'vitaminC', 'vitaminD'];
+    if (targetNutrients && targetNutrients.some(n => !validNutrients.includes(n))) {
+      return ApiResponse.error(res, `Invalid nutrients. Allowed: ${validNutrients.join(', ')}`, 400);
+    }
+
+    const validPeriods = ['today', 'week', 'month'];
+    if (period && !validPeriods.includes(period)) {
+      return ApiResponse.error(res, `Invalid period. Allowed: ${validPeriods.join(', ')}`, 400);
+    }
+
+    req.validatedData = {
+      targetNutrients: targetNutrients || [],
+      period: period || 'week'
+    };
+
+    next();
+  }
+
+  static validateSyncParams(req, res, next) {
+    const { force, itemType, batchSize } = req.body;
+
+    const validItemTypes = ['food', 'recipe'];
+    if (itemType && !validItemTypes.includes(itemType)) {
+      return ApiResponse.error(res, `Invalid item type. Allowed: ${validItemTypes.join(', ')}`, 400);
+    }
+
+    if (batchSize && (isNaN(batchSize) || parseInt(batchSize) < 1 || parseInt(batchSize) > 1000)) {
+      return ApiResponse.error(res, 'Batch size must be between 1 and 1000', 400);
+    }
+
+    req.validatedData = {
+      force: force === true,
+      itemType,
+      batchSize: batchSize ? parseInt(batchSize) : 100
+    };
+
+    next();
+  }
+
+  static validateReportParams(req, res, next) {
+    const { period, includeComparison } = req.query;
+
+    const validPeriods = ['week', 'month', 'quarter', 'year'];
+    if (period && !validPeriods.includes(period)) {
+      return ApiResponse.error(res, `Invalid period. Allowed: ${validPeriods.join(', ')}`, 400);
+    }
+
+    req.validatedQuery = {
+      ...req.validatedQuery,
+      period: period || 'month',
+      includeComparison: includeComparison === 'true'
+    };
+
+    next();
+  }
+
+  static validateExportParams(req, res, next) {
+    const { format, dateFrom, dateTo, includeNutrition, includeItemDetails, includeMetadata, limit } = req.query;
+
+    const validFormats = ['json', 'csv', 'xlsx'];
+    if (format && !validFormats.includes(format)) {
+      return ApiResponse.error(res, `Invalid format. Allowed: ${validFormats.join(', ')}`, 400);
+    }
+
+    if (dateFrom && !ValidationMiddleware.isValidDate(dateFrom)) {
+      return ApiResponse.error(res, 'Invalid dateFrom format', 400);
+    }
+
+    if (dateTo && !ValidationMiddleware.isValidDate(dateTo)) {
+      return ApiResponse.error(res, 'Invalid dateTo format', 400);
+    }
+
+    if (limit && (isNaN(limit) || parseInt(limit) < 1 || parseInt(limit) > 50000)) {
+      return ApiResponse.error(res, 'Limit must be between 1 and 50000', 400);
+    }
+
+    req.validatedQuery = {
+      ...req.validatedQuery,
+      format: format || 'json',
+      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+      dateTo: dateTo ? new Date(dateTo) : undefined,
+      includeNutrition: includeNutrition !== 'false',
+      includeItemDetails: includeItemDetails !== 'false',
+      includeMetadata: includeMetadata === 'true',
+      limit: limit ? parseInt(limit) : 10000
+    };
+
+    next();
+  }
+
+  static validateBatchIds(req, res, next) {
+    const { entryIds } = req.body;
+
+    if (!entryIds || !Array.isArray(entryIds)) {
+      return ApiResponse.error(res, 'Entry IDs array is required', 400);
+    }
+
+    if (entryIds.length === 0) {
+      return ApiResponse.error(res, 'Entry IDs array cannot be empty', 400);
+    }
+
+    if (entryIds.length > 100) {
+      return ApiResponse.error(res, 'Cannot process more than 100 entries at once', 400);
+    }
+
+    const invalidIds = entryIds.filter(id => !mongoose.Types.ObjectId.isValid(id));
+    if (invalidIds.length > 0) {
+      return ApiResponse.error(res, `Invalid entry IDs: ${invalidIds.join(', ')}`, 400);
+    }
+
+    req.validatedData = {
+      entryIds,
+      ...req.body
+    };
+
+    next();
+  }
+
+  static validateBatchConversion(req, res, next) {
+    const { entryIds, fromType, toType, conversionData } = req.body;
+
+    if (!entryIds || !Array.isArray(entryIds) || entryIds.length === 0) {
+      return ApiResponse.error(res, 'Entry IDs array is required and cannot be empty', 400);
+    }
+
+    const validTypes = ['food', 'recipe'];
+    if (!fromType || !validTypes.includes(fromType)) {
+      return ApiResponse.error(res, `Invalid fromType. Allowed: ${validTypes.join(', ')}`, 400);
+    }
+
+    if (!toType || !validTypes.includes(toType)) {
+      return ApiResponse.error(res, `Invalid toType. Allowed: ${validTypes.join(', ')}`, 400);
+    }
+
+    if (fromType === toType) {
+      return ApiResponse.error(res, 'fromType and toType cannot be the same', 400);
+    }
+
+    req.validatedData = {
+      entryIds,
+      fromType,
+      toType,
+      conversionData: conversionData || {},
+      ...req.body
+    };
+
+    next();
+  }
+
+  static validateMigrationParams(req, res, next) {
+    const { dryRun, batchSize, backupFirst } = req.body;
+
+    if (batchSize && (isNaN(batchSize) || parseInt(batchSize) < 1 || parseInt(batchSize) > 1000)) {
+      return ApiResponse.error(res, 'Batch size must be between 1 and 1000', 400);
+    }
+
+    req.validatedData = {
+      dryRun: dryRun !== false,
+      batchSize: batchSize ? parseInt(batchSize) : 100,
+      backupFirst: backupFirst !== false
+    };
+
+    next();
+  }
+
+  static validateCleanupParams(req, res, next) {
+    const { olderThan, includeOrphaned, dryRun, maxEntries } = req.body;
+
+    if (olderThan && !ValidationMiddleware.isValidDate(olderThan)) {
+      return ApiResponse.error(res, 'Invalid olderThan date format', 400);
+    }
+
+    if (maxEntries && (isNaN(maxEntries) || parseInt(maxEntries) < 1 || parseInt(maxEntries) > 10000)) {
+      return ApiResponse.error(res, 'Max entries must be between 1 and 10000', 400);
+    }
+
+    req.validatedData = {
+      olderThan: olderThan ? new Date(olderThan) : undefined,
+      includeOrphaned: includeOrphaned === true,
+      dryRun: dryRun !== false,
+      maxEntries: maxEntries ? parseInt(maxEntries) : 1000
+    };
+
+    next();
+  }
+
+  static validateQueryFilters(req, res, next) {
+    // This combines validateConsumptionFilters with additional query validation
+    ValidationMiddleware.validateConsumptionFilters(req, res, () => {
+      const { search, sortBy, sortOrder, includeDeleted } = req.query;
+
+      if (search && search.length > 0 && search.length < 2) {
+        return ApiResponse.error(res, 'Search term must be at least 2 characters', 400);
+      }
+
+      const validSortFields = ['consumedAt', 'createdAt', 'mealType', 'calories', 'foodName'];
+      if (sortBy && !validSortFields.includes(sortBy)) {
+        return ApiResponse.error(res, `Invalid sortBy. Allowed: ${validSortFields.join(', ')}`, 400);
+      }
+
+      const validSortOrders = ['asc', 'desc', '1', '-1'];
+      if (sortOrder && !validSortOrders.includes(sortOrder)) {
+        return ApiResponse.error(res, `Invalid sortOrder. Allowed: ${validSortOrders.join(', ')}`, 400);
+      }
+
+      req.validatedQuery = {
+        ...req.validatedQuery,
+        search: search ? search.trim() : undefined,
+        sortBy: sortBy || 'consumedAt',
+        sortOrder: ['desc', '-1'].includes(sortOrder) ? 'desc' : 'asc',
+        includeDeleted: includeDeleted === 'true'
+      };
+
+      next();
+    });
+  }  
+
   static validateGoalProgress(req, res, next) {
     const { isValid, errors, data } = Validators.validate(Validators.goalProgressSchema, req.body);
     

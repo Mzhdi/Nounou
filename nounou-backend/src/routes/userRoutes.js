@@ -11,55 +11,113 @@ const UserController = require('../controllers/userController');
 
 // ========== PUBLIC ROUTES (No Authentication) ==========
 
-/**
- * @route   POST /api/v1/users/register
- * @desc    Register a new user
- * @access  Public
- */
 router.post('/register', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Register a new user'
+    #swagger.description = 'Create a new user account with email and password'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: { $ref: '#/definitions/UserRegistration' }
+    }
+    #swagger.responses[201] = { 
+      description: 'User created successfully',
+      schema: { $ref: '#/definitions/AuthResponse' }
+    }
+    #swagger.responses[400] = { 
+      description: 'Invalid input data',
+      schema: { $ref: '#/definitions/Error' }
+    }
+    #swagger.responses[409] = { 
+      description: 'Email already exists',
+      schema: { $ref: '#/definitions/Error' }
+    }
+  */
   rateLimiter.authRequests,
   ValidationMiddleware.validateRegister, 
   UserController.register
 );
 
-/**
- * @route   POST /api/v1/users/login
- * @desc    Login user
- * @access  Public
- */
 router.post('/login', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Login user'
+    #swagger.description = 'Authenticate user with email and password'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: { $ref: '#/definitions/UserLogin' }
+    }
+    #swagger.responses[200] = { 
+      description: 'Login successful',
+      schema: { $ref: '#/definitions/AuthResponse' }
+    }
+    #swagger.responses[401] = { 
+      description: 'Invalid credentials',
+      schema: { $ref: '#/definitions/Error' }
+    }
+  */
   rateLimiter.authRequests,
   ValidationMiddleware.validateLogin, 
   UserController.login
 );
 
-/**
- * @route   POST /api/v1/users/refresh-token
- * @desc    Refresh authentication tokens
- * @access  Public (requires refresh token)
- */
 router.post('/refresh-token', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Refresh authentication tokens'
+    #swagger.description = 'Refresh access token using refresh token'
+    #swagger.responses[200] = { 
+      description: 'Token refreshed successfully',
+      schema: { $ref: '#/definitions/AuthResponse' }
+    }
+  */
   AuthMiddleware.refreshToken, 
   UserController.refreshToken
 );
 
-/**
- * @route   POST /api/v1/users/forgot-password
- * @desc    Request password reset
- * @access  Public
- */
 router.post('/forgot-password',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Request password reset'
+    #swagger.description = 'Send password reset email to user'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: { type: 'object', properties: { email: { type: 'string', format: 'email' } } }
+    }
+    #swagger.responses[200] = { 
+      description: 'Reset email sent',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   rateLimiter.passwordReset,
   ValidationMiddleware.validateEmail,
   UserController.forgotPassword
 );
 
-/**
- * @route   POST /api/v1/users/reset-password
- * @desc    Reset password with token
- * @access  Public
- */
 router.post('/reset-password',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Reset password with token'
+    #swagger.description = 'Reset user password using reset token'
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: { 
+        type: 'object',
+        properties: {
+          token: { type: 'string' },
+          password: { type: 'string', minLength: 8 }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'Password reset successful',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validatePasswordReset,
   UserController.resetPassword
 );
@@ -69,252 +127,546 @@ router.use(AuthMiddleware.authenticate);
 
 // ========== PROFILE MANAGEMENT ==========
 
-/**
- * @route   GET /api/v1/users/profile
- * @desc    Get user profile
- * @access  Private
- */
 router.get('/profile', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get user profile'
+    #swagger.description = 'Get authenticated user profile information'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'User profile retrieved',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          user: { $ref: '#/definitions/User' }
+        }
+      }
+    }
+    #swagger.responses[401] = { 
+      description: 'Unauthorized',
+      schema: { $ref: '#/definitions/Error' }
+    }
+  */
   UserController.getProfile
 );
 
-/**
- * @route   PUT /api/v1/users/profile
- * @desc    Update user profile
- * @access  Private
- */
 router.put('/profile', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Update user profile'
+    #swagger.description = 'Update authenticated user profile information'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      schema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', example: 'John Doe' },
+          age: { type: 'number', example: 26 },
+          height: { type: 'number', example: 176 },
+          weight: { type: 'number', example: 72 },
+          activityLevel: { type: 'string', enum: ['sedentary', 'light', 'moderate', 'active', 'very_active'] }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'Profile updated successfully',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean', example: true },
+          message: { type: 'string', example: 'Profile updated successfully' },
+          user: { $ref: '#/definitions/User' }
+        }
+      }
+    }
+  */
   ValidationMiddleware.validateUpdateProfile, 
   UserController.updateProfile
 );
 
-/**
- * @route   GET /api/v1/users/profile/history
- * @desc    Get profile modification history
- * @access  Private
- */
 router.get('/profile/history',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get profile modification history'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['page'] = { in: 'query', type: 'integer', description: 'Page number' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer', description: 'Items per page' }
+    #swagger.responses[200] = { 
+      description: 'Profile history retrieved',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          data: { type: 'array', items: { type: 'object' } },
+          pagination: { $ref: '#/definitions/Pagination' }
+        }
+      }
+    }
+  */
   ValidationMiddleware.validatePagination,
   UserController.getProfileHistory
 );
 
 // ========== AUTHENTICATION & SESSIONS ==========
 
-/**
- * @route   POST /api/v1/users/logout
- * @desc    Logout user (current session)
- * @access  Private
- */
 router.post('/logout', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Logout user'
+    #swagger.description = 'Logout current user session'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Logout successful',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   UserController.logout
 );
 
-/**
- * @route   POST /api/v1/users/logout-all
- * @desc    Logout from all devices
- * @access  Private
- */
 router.post('/logout-all', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Logout from all devices'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Logged out from all devices',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   UserController.logoutAllDevices
 );
 
-/**
- * @route   GET /api/v1/users/verify-token
- * @desc    Verify authentication token
- * @access  Private
- */
 router.get('/verify-token', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Verify authentication token'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Token is valid',
+      schema: { 
+        type: 'object',
+        properties: {
+          valid: { type: 'boolean', example: true },
+          user: { $ref: '#/definitions/User' }
+        }
+      }
+    }
+  */
   UserController.verifyToken
 );
 
-/**
- * @route   POST /api/v1/users/change-password
- * @desc    Change user password
- * @access  Private
- */
 router.post('/change-password', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Change user password'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          currentPassword: { type: 'string' },
+          newPassword: { type: 'string', minLength: 8 }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'Password changed successfully',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateChangePassword, 
   UserController.changePassword
 );
 
 // ========== SESSION MANAGEMENT ==========
 
-/**
- * @route   GET /api/v1/users/sessions
- * @desc    Get active sessions
- * @access  Private
- */
 router.get('/sessions', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get active sessions'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Active sessions retrieved',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          sessions: { 
+            type: 'array', 
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string' },
+                deviceId: { type: 'string' },
+                lastActive: { type: 'string', format: 'date-time' },
+                isCurrent: { type: 'boolean' }
+              }
+            }
+          }
+        }
+      }
+    }
+  */
   UserController.getSessions
 );
 
-/**
- * @route   DELETE /api/v1/users/sessions/:sessionId
- * @desc    Revoke a specific session
- * @access  Private
- */
 router.delete('/sessions/:sessionId', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Revoke a specific session'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['sessionId'] = { in: 'path', required: true, type: 'string', description: 'Session ID' }
+    #swagger.responses[200] = { 
+      description: 'Session revoked',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateSessionId,
   UserController.revokeSession
 );
 
 // ========== USER SETTINGS ==========
 
-/**
- * @route   GET /api/v1/users/settings
- * @desc    Get user settings
- * @access  Private
- */
 router.get('/settings',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get user settings'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'User settings retrieved',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          settings: {
+            type: 'object',
+            properties: {
+              units: { type: 'string', enum: ['metric', 'imperial'] },
+              language: { type: 'string' },
+              notifications: { type: 'boolean' },
+              privacy: { type: 'object' }
+            }
+          }
+        }
+      }
+    }
+  */
   UserController.getSettings
 );
 
-/**
- * @route   PUT /api/v1/users/settings
- * @desc    Update user settings
- * @access  Private
- */
 router.put('/settings',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Update user settings'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      schema: {
+        type: 'object',
+        properties: {
+          units: { type: 'string', enum: ['metric', 'imperial'] },
+          language: { type: 'string' },
+          notifications: { type: 'boolean' }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'Settings updated',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateSettings,
   UserController.updateSettings
 );
 
 // ========== GOALS MANAGEMENT ==========
 
-/**
- * @route   GET /api/v1/users/goals
- * @desc    Get user goals
- * @access  Private
- */
 router.get('/goals',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get user goals'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'User goals retrieved',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          goals: { type: 'array', items: { $ref: '#/definitions/UserGoal' } }
+        }
+      }
+    }
+  */
   UserController.getGoals
 );
 
-/**
- * @route   POST /api/v1/users/goals
- * @desc    Create or update a goal
- * @access  Private
- */
 router.post('/goals',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Create or update a goal'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['calories', 'protein', 'weight'] },
+          target: { type: 'number' },
+          unit: { type: 'string' },
+          period: { type: 'string', enum: ['daily', 'weekly', 'monthly'] }
+        }
+      }
+    }
+    #swagger.responses[201] = { 
+      description: 'Goal created/updated',
+      schema: { 
+        type: 'object',
+        properties: {
+          success: { type: 'boolean' },
+          goal: { $ref: '#/definitions/UserGoal' }
+        }
+      }
+    }
+  */
   ValidationMiddleware.validateGoal,
   UserController.upsertGoal
 );
 
-/**
- * @route   PUT /api/v1/users/goals/:goalId
- * @desc    Update a specific goal
- * @access  Private
- */
 router.put('/goals/:goalId',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Update a specific goal'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['goalId'] = { in: 'path', required: true, type: 'string', description: 'Goal ID' }
+    #swagger.parameters['body'] = {
+      in: 'body',
+      schema: { $ref: '#/definitions/UserGoal' }
+    }
+    #swagger.responses[200] = { 
+      description: 'Goal updated',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateGoalId,
   ValidationMiddleware.validateGoal,
   UserController.upsertGoal
 );
 
-/**
- * @route   DELETE /api/v1/users/goals/:goalId
- * @desc    Delete a goal
- * @access  Private
- */
 router.delete('/goals/:goalId',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Delete a goal'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['goalId'] = { in: 'path', required: true, type: 'string', description: 'Goal ID' }
+    #swagger.responses[200] = { 
+      description: 'Goal deleted',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateGoalId,
   UserController.deleteGoal
 );
 
 // ========== ACCOUNT MANAGEMENT ==========
 
-/**
- * @route   DELETE /api/v1/users/account
- * @desc    Deactivate user account
- * @access  Private
- */
 router.delete('/account', 
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Deactivate user account'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          password: { type: 'string' },
+          reason: { type: 'string' }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'Account deactivated',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateAccountDeletion,
   UserController.deleteAccount
 );
 
-/**
- * @route   GET /api/v1/users/export
- * @desc    Export user data (GDPR)
- * @access  Private
- */
 router.get('/export',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Export user data (GDPR)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['format'] = { in: 'query', type: 'string', enum: ['json', 'csv'], default: 'json' }
+    #swagger.responses[200] = { 
+      description: 'User data exported',
+      schema: { type: 'object' }
+    }
+  */
   rateLimiter.exportData,
   ValidationMiddleware.validateExportFormat,
   UserController.exportUserData
 );
 
-/**
- * @route   POST /api/v1/users/request-deletion
- * @desc    Request complete data deletion (GDPR)
- * @access  Private
- */
 router.post('/request-deletion',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Request complete data deletion (GDPR)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Deletion request submitted',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateDataDeletionRequest,
   UserController.requestDataDeletion
 );
 
 // ========== SUBSCRIPTION MANAGEMENT ==========
 
-/**
- * @route   GET /api/v1/users/subscription
- * @desc    Get subscription info
- * @access  Private
- */
 router.get('/subscription',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get subscription info'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Subscription info retrieved',
+      schema: { 
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['free', 'premium', 'pro'] },
+          status: { type: 'string' },
+          expiresAt: { type: 'string', format: 'date-time' },
+          features: { type: 'array', items: { type: 'string' } }
+        }
+      }
+    }
+  */
   UserController.getSubscriptionInfo
 );
 
-/**
- * @route   POST /api/v1/users/subscription/upgrade
- * @desc    Upgrade subscription
- * @access  Private
- */
 router.post('/subscription/upgrade',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Upgrade subscription'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      required: true,
+      schema: {
+        type: 'object',
+        properties: {
+          plan: { type: 'string', enum: ['premium', 'pro'] },
+          paymentMethod: { type: 'string' }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'Subscription upgraded',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   ValidationMiddleware.validateSubscriptionUpgrade,
   UserController.upgradeSubscription
 );
 
-/**
- * @route   POST /api/v1/users/subscription/cancel
- * @desc    Cancel subscription
- * @access  Private
- */
 router.post('/subscription/cancel',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Cancel subscription'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Subscription cancelled',
+      schema: { $ref: '#/definitions/Success' }
+    }
+  */
   AuthMiddleware.requireSubscription(['premium', 'pro']),
   UserController.cancelSubscription
 );
 
 // ========== PREMIUM FEATURES ==========
 
-/**
- * @route   GET /api/v1/users/insights
- * @desc    Get personalized insights (Premium)
- * @access  Private (Premium/Pro)
- */
 router.get('/insights',
+  /* 
+    #swagger.tags = ['Users', 'Analytics']
+    #swagger.summary = 'Get personalized insights (Premium)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['page'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
+    #swagger.responses[200] = { 
+      description: 'Personalized insights',
+      schema: { 
+        type: 'object',
+        properties: {
+          insights: { type: 'array', items: { type: 'object' } },
+          recommendations: { type: 'array', items: { type: 'string' } }
+        }
+      }
+    }
+    #swagger.responses[403] = { 
+      description: 'Premium subscription required',
+      schema: { $ref: '#/definitions/Error' }
+    }
+  */
   AuthMiddleware.requirePremium,
   ValidationMiddleware.validatePagination,
   UserController.getPersonalizedInsights
 );
 
-/**
- * @route   GET /api/v1/users/analytics
- * @desc    Get advanced analytics (Pro)
- * @access  Private (Pro only)
- */
 router.get('/analytics',
+  /* 
+    #swagger.tags = ['Users', 'Analytics']
+    #swagger.summary = 'Get advanced analytics (Pro)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['dateFrom'] = { in: 'query', type: 'string', format: 'date' }
+    #swagger.parameters['dateTo'] = { in: 'query', type: 'string', format: 'date' }
+    #swagger.responses[200] = { 
+      description: 'Advanced analytics data',
+      schema: { type: 'object' }
+    }
+    #swagger.responses[403] = { 
+      description: 'Pro subscription required',
+      schema: { $ref: '#/definitions/Error' }
+    }
+  */
   AuthMiddleware.requirePro,
   ValidationMiddleware.validateDateRange,
   UserController.getAdvancedAnalytics
 );
 
-/**
- * @route   POST /api/v1/users/ai-coach
- * @desc    Get AI nutritionist recommendations (Premium/Pro)
- * @access  Private (Premium/Pro)
- */
 router.post('/ai-coach',
+  /* 
+    #swagger.tags = ['Users', 'Analytics']
+    #swagger.summary = 'Get AI nutritionist recommendations (Premium/Pro)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['body'] = {
+      in: 'body',
+      schema: {
+        type: 'object',
+        properties: {
+          question: { type: 'string' },
+          context: { type: 'object' }
+        }
+      }
+    }
+    #swagger.responses[200] = { 
+      description: 'AI coach recommendations',
+      schema: { 
+        type: 'object',
+        properties: {
+          recommendation: { type: 'string' },
+          confidence: { type: 'number' }
+        }
+      }
+    }
+  */
   AuthMiddleware.requirePremium,
   AuthMiddleware.validateFeature('ai_analysis'),
   rateLimiter.aiAnalysis,
@@ -322,152 +674,93 @@ router.post('/ai-coach',
   UserController.getAICoachRecommendations
 );
 
-// ========== SOCIAL FEATURES ==========
-
-/**
- * @route   GET /api/v1/users/profile/public/:userId
- * @desc    Get public profile of another user
- * @access  Private (Optional auth)
- */
-router.get('/profile/public/:userId',
-  AuthMiddleware.optionalAuth,
-  ValidationMiddleware.validateUserId,
-  UserController.getPublicProfile
-);
-
-/**
- * @route   POST /api/v1/users/follow/:userId
- * @desc    Follow another user
- * @access  Private
- */
-router.post('/follow/:userId',
-  ValidationMiddleware.validateUserId,
-  UserController.followUser
-);
-
-/**
- * @route   DELETE /api/v1/users/follow/:userId
- * @desc    Unfollow a user
- * @access  Private
- */
-router.delete('/follow/:userId',
-  ValidationMiddleware.validateUserId,
-  UserController.unfollowUser
-);
-
-/**
- * @route   GET /api/v1/users/followers
- * @desc    Get user followers
- * @access  Private
- */
-router.get('/followers',
-  ValidationMiddleware.validatePagination,
-  UserController.getFollowers
-);
-
-/**
- * @route   GET /api/v1/users/following
- * @desc    Get users being followed
- * @access  Private
- */
-router.get('/following',
-  ValidationMiddleware.validatePagination,
-  UserController.getFollowing
-);
-
 // ========== ADMIN ROUTES ==========
 
-/**
- * @route   GET /api/v1/users/admin/stats
- * @desc    Get user statistics (Admin only)
- * @access  Private (Admin)
- */
 router.get('/admin/stats', 
+  /* 
+    #swagger.tags = ['Admin']
+    #swagger.summary = 'Get user statistics (Admin only)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'User statistics',
+      schema: { type: 'object' }
+    }
+    #swagger.responses[403] = { 
+      description: 'Admin access required',
+      schema: { $ref: '#/definitions/Error' }
+    }
+  */
   AuthMiddleware.requireAdmin,
   UserController.getUserStats
 );
 
-/**
- * @route   GET /api/v1/users/admin/search
- * @desc    Search users (Admin only)
- * @access  Private (Admin)
- */
 router.get('/admin/search',
+  /* 
+    #swagger.tags = ['Admin']
+    #swagger.summary = 'Search users (Admin only)'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.parameters['q'] = { in: 'query', required: true, type: 'string', description: 'Search query' }
+    #swagger.parameters['page'] = { in: 'query', type: 'integer' }
+    #swagger.parameters['limit'] = { in: 'query', type: 'integer' }
+    #swagger.responses[200] = { 
+      description: 'Search results',
+      schema: { 
+        type: 'object',
+        properties: {
+          users: { type: 'array', items: { $ref: '#/definitions/User' } },
+          pagination: { $ref: '#/definitions/Pagination' }
+        }
+      }
+    }
+  */
   AuthMiddleware.requireAdmin,
   ValidationMiddleware.validateSearch,
   ValidationMiddleware.validatePagination,
   UserController.searchUsers
 );
 
-/**
- * @route   PUT /api/v1/users/admin/:userId/status
- * @desc    Update user status (Admin only)
- * @access  Private (Admin)
- */
-router.put('/admin/:userId/status',
-  AuthMiddleware.requireAdmin,
-  ValidationMiddleware.validateUserId,
-  ValidationMiddleware.validateUserStatusUpdate,
-  UserController.updateUserStatus
-);
-
-/**
- * @route   POST /api/v1/users/admin/:userId/impersonate
- * @desc    Impersonate user (Super Admin only)
- * @access  Private (Super Admin)
- */
-router.post('/admin/:userId/impersonate',
-  AuthMiddleware.requireRole(['superadmin']),
-  ValidationMiddleware.validateUserId,
-  UserController.impersonateUser
-);
-
-/**
- * @route   GET /api/v1/users/admin/reports/daily
- * @desc    Get daily user reports (Admin)
- * @access  Private (Admin)
- */
-router.get('/admin/reports/daily',
-  AuthMiddleware.requireAdmin,
-  ValidationMiddleware.validateDateRange,
-  UserController.getDailyUserReports
-);
-
-/**
- * @route   POST /api/v1/users/admin/bulk-actions
- * @desc    Perform bulk actions on users (Admin)
- * @access  Private (Admin)
- */
-router.post('/admin/bulk-actions',
-  AuthMiddleware.requireAdmin,
-  ValidationMiddleware.validateBatchSize(100),
-  ValidationMiddleware.validateObjectIds('userIds'),
-  ValidationMiddleware.validateBulkUserAction,
-  UserController.performBulkActions
-);
-
 // ========== UTILITY ROUTES ==========
 
-/**
- * @route   GET /api/v1/users/health
- * @desc    Health check endpoint
- * @access  Public
- */
 router.get('/health', (req, res) => {
+  /* 
+    #swagger.tags = ['Health']
+    #swagger.summary = 'User service health check'
+    #swagger.responses[200] = { 
+      description: 'Service is healthy',
+      schema: { 
+        type: 'object',
+        properties: {
+          status: { type: 'string', example: 'healthy' },
+          service: { type: 'string', example: 'user-service' },
+          version: { type: 'string', example: '2.0.0' }
+        }
+      }
+    }
+  */
   res.json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
     service: 'user-service',
-    version: process.env.API_VERSION || '1.0.0'
+    version: process.env.API_VERSION || '2.0.0'
   });
 });
 
-/**
- * @route   GET /api/v1/users/features
- * @desc    Get available features for current user
- * @access  Private
- */
 router.get('/features',
+  /* 
+    #swagger.tags = ['Users']
+    #swagger.summary = 'Get available features for current user'
+    #swagger.security = [{ bearerAuth: [] }]
+    #swagger.responses[200] = { 
+      description: 'Available features',
+      schema: { 
+        type: 'object',
+        properties: {
+          features: { type: 'array', items: { type: 'string' } },
+          subscription: { type: 'string' }
+        }
+      }
+    }
+  */
   UserController.getAvailableFeatures
 );
 

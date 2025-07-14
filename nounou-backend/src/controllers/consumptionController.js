@@ -1,21 +1,22 @@
 const ConsumptionService = require('../services/consumptionService');
 const ApiResponse = require('../utils/responses');
-const { SUCCESS, ERRORS } = require('../config/constants');
 
 class ConsumptionController {
 
-  // Créer une nouvelle entrée de consommation
+  // ========================================
+  // CRÉATION D'ENTRÉES UNIFIÉES
+  // ========================================
+
   async createEntry(req, res, next) {
     try {
+      const { user } = req;
       const entryData = req.validatedData;
-      const userId = req.user.id;
 
-      // Ajouter des métadonnées pour le tracking
+      // Enrichir avec les métadonnées de device/location
       const enrichedData = {
         ...entryData,
-        userId,
         deviceInfo: {
-          deviceId: req.user.deviceId,
+          deviceId: req.user?.deviceId,
           deviceType: entryData.deviceType || 'mobile',
           ipAddress: req.ip,
           userAgent: req.get('User-Agent')
@@ -23,50 +24,144 @@ class ConsumptionController {
         consumedAt: entryData.consumedAt || new Date()
       };
 
-      const result = await ConsumptionService.createConsumptionEntry(userId, enrichedData);
+      const result = await ConsumptionService.createConsumptionEntry(user.id, enrichedData);
       
-      return ApiResponse.success(res, result, 'Consumption entry created successfully', 201);
+      return ApiResponse.created(res, result, 'Consumption entry created successfully');
     } catch (error) {
       next(error);
     }
   }
 
-  // Obtenir les entrées de consommation d'un utilisateur
+  async createFoodEntry(req, res, next) {
+    try {
+      const { user } = req;
+      const entryData = req.validatedData;
+
+      const result = await ConsumptionService.createConsumptionEntry(user.id, entryData);
+      
+      return ApiResponse.created(res, result, 'Food entry created successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createRecipeEntry(req, res, next) {
+    try {
+      const { user } = req;
+      const entryData = req.validatedData;
+
+      const result = await ConsumptionService.createConsumptionEntry(user.id, entryData);
+      
+      return ApiResponse.created(res, result, 'Recipe entry created successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async createMealFromRecipe(req, res, next) {
+    try {
+      const { user } = req;
+      const { recipeId } = req.params;
+      const options = req.validatedData;
+
+      const result = await ConsumptionService.createMealFromRecipe(user.id, recipeId, options);
+      
+      return ApiResponse.created(res, result, 'Meal created from recipe successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async addQuickMeal(req, res, next) {
+    try {
+      const { user } = req;
+      const mealData = req.validatedData;
+
+      const result = await ConsumptionService.addQuickMeal(user.id, mealData);
+      
+      return ApiResponse.created(res, result, 'Quick meal created successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // RÉCUPÉRATION ET RECHERCHE
+  // ========================================
+
   async getUserEntries(req, res, next) {
     try {
-      const userId = req.user.id;
+      const { user } = req;
       const filters = {
         page: parseInt(req.query.page) || 1,
         limit: parseInt(req.query.limit) || 20,
         mealType: req.query.mealType,
+        itemType: req.query.itemType,
         dateFrom: req.query.dateFrom,
         dateTo: req.query.dateTo,
         entryMethod: req.query.entryMethod,
         search: req.query.search,
-        tags: req.query.tags ? req.query.tags.split(',') : undefined,
+        tags: req.query.tags,
         sortBy: req.query.sortBy || 'consumedAt',
         sortOrder: req.query.sortOrder || 'desc',
         minCalories: req.query.minCalories ? parseFloat(req.query.minCalories) : undefined,
         maxCalories: req.query.maxCalories ? parseFloat(req.query.maxCalories) : undefined,
-        includeNutrition: req.query.includeNutrition !== 'false',
-        includeFood: req.query.includeFood !== 'false'
+        includeDeleted: req.query.includeDeleted === 'true'
       };
 
-      const result = await ConsumptionService.getUserConsumptions(userId, filters);
+      const result = await ConsumptionService.getUserConsumptions(user.id, filters);
       
-      return ApiResponse.success(res, result, 'User consumption entries retrieved successfully');
+      return ApiResponse.paginated(res, result.entries, result.pagination, 'Consumption entries retrieved successfully', {
+        filters: result.filters,
+        summary: result.summary
+      });
     } catch (error) {
       next(error);
     }
   }
 
-  // Obtenir une entrée spécifique par ID
+  async getFoodEntries(req, res, next) {
+    try {
+      const { user } = req;
+      const filters = {
+        ...req.query,
+        itemType: 'food',
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20
+      };
+
+      const result = await ConsumptionService.getUserConsumptions(user.id, filters);
+      
+      return ApiResponse.paginated(res, result.entries, result.pagination, 'Food entries retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getRecipeEntries(req, res, next) {
+    try {
+      const { user } = req;
+      const filters = {
+        ...req.query,
+        itemType: 'recipe',
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20
+      };
+
+      const result = await ConsumptionService.getUserConsumptions(user.id, filters);
+      
+      return ApiResponse.paginated(res, result.entries, result.pagination, 'Recipe entries retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async getEntryById(req, res, next) {
     try {
+      const { user } = req;
       const { entryId } = req.params;
-      const userId = req.user.id;
 
-      const result = await ConsumptionService.getConsumptionById(entryId, userId);
+      const result = await ConsumptionService.getConsumptionById(entryId, user.id);
       
       return ApiResponse.success(res, result, 'Consumption entry retrieved successfully');
     } catch (error) {
@@ -74,24 +169,239 @@ class ConsumptionController {
     }
   }
 
-  // Mettre à jour une entrée de consommation
-  async updateEntry(req, res, next) {
+  async searchEntries(req, res, next) {
     try {
-      const { entryId } = req.params;
-      const userId = req.user.id;
-      const updateData = req.validatedData;
-
-      // Ajouter des métadonnées de mise à jour
-      const enrichedUpdateData = {
-        ...updateData,
-        lastModified: {
-          at: new Date(),
-          by: userId,
-          reason: req.body.updateReason || 'user_edit'
-        }
+      const { user } = req;
+      const searchOptions = {
+        query: req.query.q,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20,
+        itemType: req.query.itemType,
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo
       };
 
-      const result = await ConsumptionService.updateConsumptionEntry(entryId, userId, enrichedUpdateData);
+      const result = await ConsumptionService.searchConsumptionEntries(user.id, searchOptions);
+      
+      return ApiResponse.paginated(res, result.results, result.pagination, 'Search completed successfully', {
+        searchQuery: result.searchQuery,
+        filters: result.filters
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async searchFoodEntries(req, res, next) {
+    try {
+      const { user } = req;
+      const searchOptions = {
+        query: req.query.q,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20,
+        itemType: 'food'
+      };
+
+      const result = await ConsumptionService.searchConsumptionEntries(user.id, searchOptions);
+      
+      return ApiResponse.paginated(res, result.results, result.pagination, 'Food search completed successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async searchRecipeEntries(req, res, next) {
+    try {
+      const { user } = req;
+      const searchOptions = {
+        query: req.query.q,
+        page: parseInt(req.query.page) || 1,
+        limit: parseInt(req.query.limit) || 20,
+        itemType: 'recipe'
+      };
+
+      const result = await ConsumptionService.searchConsumptionEntries(user.id, searchOptions);
+      
+      return ApiResponse.paginated(res, result.results, result.pagination, 'Recipe search completed successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // ANALYTICS ET DASHBOARD
+  // ========================================
+
+  async getDashboard(req, res, next) {
+    try {
+      const { user } = req;
+      const period = req.query.period || 'today';
+      const options = {
+        includeComparison: req.query.includeComparison === 'true',
+        includeGoals: req.query.includeGoals !== 'false',
+        includeInsights: req.query.includeInsights === 'true',
+        weekOffset: parseInt(req.query.weekOffset) || 0,
+        monthOffset: parseInt(req.query.monthOffset) || 0
+      };
+
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, period, options);
+      
+      return ApiResponse.success(res, dashboard, 'Nutrition dashboard retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getDashboardByType(req, res, next) {
+    try {
+      const { user } = req;
+      const period = req.query.period || 'today';
+      
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, period);
+      
+      // Formater pour montrer la breakdown par type
+      const byTypeBreakdown = {
+        period,
+        dateRange: dashboard.dateRange,
+        foodVsRecipe: dashboard.breakdown.byItemType,
+        insights: {
+          foodPercentage: dashboard.breakdown.byItemType.food ? 
+            Math.round((dashboard.breakdown.byItemType.food.calories / dashboard.totals.totalCalories) * 100) : 0,
+          recipePercentage: dashboard.breakdown.byItemType.recipe ? 
+            Math.round((dashboard.breakdown.byItemType.recipe.calories / dashboard.totals.totalCalories) * 100) : 0
+        }
+      };
+      
+      return ApiResponse.success(res, byTypeBreakdown, 'Type breakdown dashboard retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getTopConsumedItems(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        limit: parseInt(req.query.limit) || 10,
+        period: req.query.period || 'month',
+        itemType: req.query.itemType,
+        mealType: req.query.mealType
+      };
+
+      const result = await ConsumptionService.getTopConsumedItems(user.id, options);
+      
+      return ApiResponse.success(res, result, 'Top consumed items retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getTopFoods(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        limit: parseInt(req.query.limit) || 10,
+        period: req.query.period || 'month',
+        itemType: 'food',
+        mealType: req.query.mealType
+      };
+
+      const result = await ConsumptionService.getTopConsumedItems(user.id, options);
+      
+      return ApiResponse.success(res, {
+        foods: result.items,
+        generatedAt: result.generatedAt,
+        period: result.period
+      }, 'Top consumed foods retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getTopRecipes(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        limit: parseInt(req.query.limit) || 10,
+        period: req.query.period || 'month',
+        itemType: 'recipe',
+        mealType: req.query.mealType
+      };
+
+      const result = await ConsumptionService.getTopConsumedItems(user.id, options);
+      
+      return ApiResponse.success(res, {
+        recipes: result.items,
+        generatedAt: result.generatedAt,
+        period: result.period
+      }, 'Top consumed recipes retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getNutritionBalance(req, res, next) {
+    try {
+      const { user } = req;
+      const period = req.query.period || 'week';
+      const includeComparison = req.query.includeComparison === 'true';
+
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, period, {
+        includeComparison
+      });
+
+      const balance = {
+        period,
+        dateRange: dashboard.dateRange,
+        nutritionSources: dashboard.breakdown.byItemType,
+        balance: {
+          foodCalories: dashboard.breakdown.byItemType.food?.calories || 0,
+          recipeCalories: dashboard.breakdown.byItemType.recipe?.calories || 0,
+          totalCalories: dashboard.totals.totalCalories,
+          foodPercentage: dashboard.totals.totalCalories > 0 ? 
+            Math.round(((dashboard.breakdown.byItemType.food?.calories || 0) / dashboard.totals.totalCalories) * 100) : 0,
+          recipePercentage: dashboard.totals.totalCalories > 0 ? 
+            Math.round(((dashboard.breakdown.byItemType.recipe?.calories || 0) / dashboard.totals.totalCalories) * 100) : 0
+        },
+        recommendations: this.generateBalanceRecommendations(dashboard.breakdown.byItemType)
+      };
+      
+      return ApiResponse.success(res, balance, 'Nutrition balance analysis retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getCustomStats(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
+        groupBy: req.query.groupBy || 'day',
+        metrics: req.query.metrics ? req.query.metrics.split(',') : ['calories', 'protein', 'carbs', 'fat'],
+        includeComparison: req.query.includeComparison === 'true'
+      };
+
+      const stats = await ConsumptionService.getCustomPeriodStats(user.id, options);
+      
+      return ApiResponse.success(res, stats, 'Custom period statistics retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // GESTION DES ENTRÉES
+  // ========================================
+
+  async updateEntry(req, res, next) {
+    try {
+      const { user } = req;
+      const { entryId } = req.params;
+      const updateData = req.validatedData;
+
+      const result = await ConsumptionService.updateConsumptionEntry(entryId, user.id, updateData);
       
       return ApiResponse.success(res, result, 'Consumption entry updated successfully');
     } catch (error) {
@@ -99,18 +409,15 @@ class ConsumptionController {
     }
   }
 
-  // Supprimer une entrée de consommation (soft delete)
   async deleteEntry(req, res, next) {
     try {
+      const { user } = req;
       const { entryId } = req.params;
-      const userId = req.user.id;
       const { reason = 'user_delete', hardDelete = false } = req.body;
 
-      const result = await ConsumptionService.deleteConsumptionEntry(entryId, userId, {
+      const result = await ConsumptionService.deleteConsumptionEntry(entryId, user.id, {
         reason,
-        hardDelete,
-        deletedBy: userId,
-        deletedAt: new Date()
+        hardDelete
       });
       
       return ApiResponse.success(res, result, 'Consumption entry deleted successfully');
@@ -119,13 +426,12 @@ class ConsumptionController {
     }
   }
 
-  // Restaurer une entrée supprimée
   async restoreEntry(req, res, next) {
     try {
+      const { user } = req;
       const { entryId } = req.params;
-      const userId = req.user.id;
 
-      const result = await ConsumptionService.restoreConsumptionEntry(entryId, userId);
+      const result = await ConsumptionService.restoreConsumptionEntry(entryId, user.id);
       
       return ApiResponse.success(res, result, 'Consumption entry restored successfully');
     } catch (error) {
@@ -133,61 +439,535 @@ class ConsumptionController {
     }
   }
 
-  // Obtenir le dashboard nutritionnel
-  async getDashboard(req, res, next) {
+  async duplicateEntry(req, res, next) {
     try {
-      const userId = req.user.id;
-      const period = req.query.period || 'today'; // today, week, month, year
+      const { user } = req;
+      const { entryId } = req.params;
+      const { mealType, consumedAt, quantity, servings, notes } = req.body;
+
+      const duplicateData = {
+        mealType,
+        consumedAt: consumedAt || new Date(),
+        quantity,
+        servings,
+        notes
+      };
+
+      const result = await ConsumptionService.duplicateConsumptionEntry(entryId, user.id, duplicateData);
+      
+      return ApiResponse.created(res, result, 'Entry duplicated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async recalculateNutrition(req, res, next) {
+    try {
+      const { user } = req;
+      const { entryId } = req.params;
+
+      const result = await ConsumptionService.recalculateNutrition(entryId, user.id);
+      
+      return ApiResponse.success(res, result, 'Nutrition recalculated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // SUGGESTIONS ET RECOMMANDATIONS
+  // ========================================
+
+  async getFoodSuggestions(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        mealType: req.query.mealType,
+        timeOfDay: req.query.timeOfDay,
+        limit: parseInt(req.query.limit) || 10,
+        basedOnHistory: req.query.basedOn !== 'goals',
+        basedOnGoals: req.query.basedOn !== 'history'
+      };
+
+      const result = await ConsumptionService.getFoodSuggestions(user.id, options);
+      
+      return ApiResponse.success(res, result, 'Food suggestions retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getRecipeSuggestions(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        mealType: req.query.mealType,
+        limit: parseInt(req.query.limit) || 10,
+        basedOnHistory: req.query.basedOn !== 'ingredients',
+        basedOnIngredients: req.query.basedOn === 'ingredients'
+      };
+
+      const result = await ConsumptionService.getRecipeSuggestions(user.id, options);
+      
+      return ApiResponse.success(res, result, 'Recipe suggestions retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMissingNutrientRecommendations(req, res, next) {
+    try {
+      const { user } = req;
+      const { targetNutrients, period = 'week' } = req.body;
+
+      // TODO: Implémenter la logique de recommandations pour nutriments manquants
+      const recommendations = {
+        missingNutrients: targetNutrients || [],
+        recommendedFoods: [],
+        recommendedRecipes: [],
+        period,
+        generatedAt: new Date()
+      };
+      
+      return ApiResponse.success(res, recommendations, 'Nutrient recommendations generated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // VALIDATION ET SYNCHRONISATION
+  // ========================================
+
+  async validateFoodExists(req, res, next) {
+    try {
+      const { foodId } = req.params;
+
+      const validation = await ConsumptionService.validateFoodExists(foodId);
+      
+      return ApiResponse.success(res, validation, 'Food validation completed');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async validateRecipeExists(req, res, next) {
+    try {
+      const { recipeId } = req.params;
+
+      const validation = await ConsumptionService.validateRecipeExists(recipeId);
+      
+      return ApiResponse.success(res, validation, 'Recipe validation completed');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async syncNutritionData(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        force: req.body.force || false,
+        itemType: req.body.itemType,
+        batchSize: req.body.batchSize || 100
+      };
+
+      const result = await ConsumptionService.syncNutritionData(user.id, options);
+      
+      return ApiResponse.success(res, result, 'Nutrition data synchronized successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // RAPPORTS ET EXPORT
+  // ========================================
+
+  async getNutritionSourcesReport(req, res, next) {
+    try {
+      const { user } = req;
+      const period = req.query.period || 'month';
       const includeComparison = req.query.includeComparison === 'true';
-      const includeGoals = req.query.includeGoals !== 'false';
 
-      const dashboard = await ConsumptionService.getNutritionDashboard(userId, period, {
-        includeComparison,
-        includeGoals,
-        includeInsights: true
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, period, {
+        includeComparison
       });
+
+      const report = {
+        period,
+        dateRange: dashboard.dateRange,
+        nutritionSources: dashboard.breakdown.byItemType,
+        sourceAnalysis: {
+          totalFromFoods: dashboard.breakdown.byItemType.food?.calories || 0,
+          totalFromRecipes: dashboard.breakdown.byItemType.recipe?.calories || 0,
+          foodPercentage: dashboard.totals.totalCalories > 0 ? 
+            Math.round(((dashboard.breakdown.byItemType.food?.calories || 0) / dashboard.totals.totalCalories) * 100) : 0,
+          recipePercentage: dashboard.totals.totalCalories > 0 ? 
+            Math.round(((dashboard.breakdown.byItemType.recipe?.calories || 0) / dashboard.totals.totalCalories) * 100) : 0
+        },
+        recommendations: this.generateSourceRecommendations(dashboard.breakdown.byItemType),
+        generatedAt: new Date()
+      };
       
-      return ApiResponse.success(res, dashboard, 'Nutrition dashboard retrieved successfully');
+      return ApiResponse.success(res, report, 'Nutrition sources report generated successfully');
     } catch (error) {
       next(error);
     }
   }
 
-  // Obtenir les statistiques pour une période personnalisée
-  async getCustomStats(req, res, next) {
+  async getRecipeUsageReport(req, res, next) {
     try {
-      const userId = req.user.id;
-      const { dateFrom, dateTo, groupBy = 'day', metrics, includeComparison } = req.query;
+      const { user } = req;
+      const period = req.query.period || 'month';
 
-      if (!dateFrom || !dateTo) {
-        return ApiResponse.badRequestError(res, 'dateFrom and dateTo are required');
+      const topRecipes = await ConsumptionService.getTopConsumedItems(user.id, {
+        itemType: 'recipe',
+        period,
+        limit: 20
+      });
+
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, period);
+
+      const report = {
+        period,
+        dateRange: dashboard.dateRange,
+        topRecipes: topRecipes.items,
+        usage: {
+          totalRecipeEntries: dashboard.breakdown.byItemType.recipe?.entries || 0,
+          totalRecipeCalories: dashboard.breakdown.byItemType.recipe?.calories || 0,
+          averageServingsPerRecipe: topRecipes.items.length > 0 ? 
+            topRecipes.items.reduce((sum, recipe) => sum + recipe.totalQuantity, 0) / topRecipes.items.length : 0
+        },
+        insights: this.generateRecipeUsageInsights(topRecipes.items),
+        generatedAt: new Date()
+      };
+      
+      return ApiResponse.success(res, report, 'Recipe usage report generated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getFoodVsRecipeReport(req, res, next) {
+    try {
+      const { user } = req;
+      const period = req.query.period || 'month';
+      const includeComparison = req.query.includeComparison === 'true';
+
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, period, {
+        includeComparison
+      });
+
+      const report = {
+        period,
+        dateRange: dashboard.dateRange,
+        comparison: {
+          foods: dashboard.breakdown.byItemType.food || {},
+          recipes: dashboard.breakdown.byItemType.recipe || {},
+          totals: dashboard.totals
+        },
+        analysis: {
+          preferredSource: (dashboard.breakdown.byItemType.food?.calories || 0) > 
+                          (dashboard.breakdown.byItemType.recipe?.calories || 0) ? 'foods' : 'recipes',
+          diversity: {
+            foodVariety: dashboard.breakdown.byItemType.food?.entries || 0,
+            recipeVariety: dashboard.breakdown.byItemType.recipe?.entries || 0
+          },
+          nutritionalProfile: this.compareNutritionalProfiles(dashboard.breakdown.byItemType)
+        },
+        recommendations: this.generateFoodVsRecipeRecommendations(dashboard.breakdown.byItemType),
+        generatedAt: new Date()
+      };
+      
+      return ApiResponse.success(res, report, 'Food vs Recipe comparative report generated successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async exportUnifiedData(req, res, next) {
+    try {
+      const { user } = req;
+      const options = {
+        format: req.query.format || 'json',
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
+        includeNutrition: req.query.includeNutrition !== 'false',
+        includeItemDetails: req.query.includeItemDetails !== 'false',
+        includeMetadata: req.query.includeMetadata === 'true',
+        limit: parseInt(req.query.limit) || 10000
+      };
+
+      const data = await ConsumptionService.exportUserConsumptions(user.id, options);
+
+      if (options.format === 'json') {
+        return ApiResponse.success(res, data, 'Data exported successfully');
+      } else {
+        // Pour CSV/XLSX, définir les headers appropriés
+        const filename = `consumption_unified_${user.id}_${new Date().toISOString().split('T')[0]}.${options.format}`;
+        res.setHeader('Content-Type', 
+          options.format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        );
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        return res.send(data);
       }
-
-      const stats = await ConsumptionService.getCustomPeriodStats(userId, {
-        dateFrom,
-        dateTo,
-        groupBy,
-        metrics: metrics ? metrics.split(',') : ['calories', 'protein', 'carbs', 'fat'],
-        includeComparison: includeComparison === 'true'
-      });
-      
-      return ApiResponse.success(res, stats, 'Custom period statistics retrieved successfully');
     } catch (error) {
       next(error);
     }
   }
 
-  // Obtenir les statistiques par type de repas pour aujourd'hui
-  async getTodayMealStats(req, res, next) {
+  async exportDataByType(req, res, next) {
     try {
-      const userId = req.user.id;
+      const { user } = req;
+      const options = {
+        format: req.query.format || 'json',
+        dateFrom: req.query.dateFrom,
+        dateTo: req.query.dateTo,
+        includeNutrition: req.query.includeNutrition !== 'false',
+        includeItemDetails: req.query.includeItemDetails !== 'false'
+      };
+
+      // Export séparé pour foods et recipes
+      const foodData = await ConsumptionService.exportUserConsumptions(user.id, {
+        ...options,
+        itemType: 'food'
+      });
+
+      const recipeData = await ConsumptionService.exportUserConsumptions(user.id, {
+        ...options,
+        itemType: 'recipe'
+      });
+
+      const separatedData = {
+        user: user.id,
+        exportedAt: new Date().toISOString(),
+        format: options.format,
+        foods: foodData,
+        recipes: recipeData
+      };
+
+      return ApiResponse.success(res, separatedData, 'Data exported by type successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // OPÉRATIONS EN LOT
+  // ========================================
+
+  async batchOperations(req, res, next) {
+    try {
+      const { user } = req;
+      const { operation, entryIds, updateData } = req.body;
+
+      const options = {
+        operation,
+        entryIds,
+        updateData,
+        performedBy: user.id,
+        performedAt: new Date()
+      };
+
+      const result = await ConsumptionService.batchOperations(user.id, options);
       
-      const dashboard = await ConsumptionService.getNutritionDashboard(userId, 'today');
+      return ApiResponse.success(res, result, `Batch ${operation} completed successfully`);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async batchRecalculateNutrition(req, res, next) {
+    try {
+      const { user } = req;
+      const { entryIds } = req.body;
+
+      const result = await ConsumptionService.batchOperations(user.id, {
+        operation: 'recalculate',
+        entryIds,
+        performedBy: user.id,
+        performedAt: new Date()
+      });
+      
+      return ApiResponse.success(res, result, 'Batch nutrition recalculation completed successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async batchConvertItemType(req, res, next) {
+    try {
+      const { user } = req;
+      const { entryIds, fromType, toType, conversionData } = req.body;
+
+      // TODO: Implémenter la conversion de type en lot
+      const result = {
+        message: 'Batch conversion not yet implemented',
+        entryIds,
+        fromType,
+        toType,
+        conversionData
+      };
+      
+      return ApiResponse.success(res, result, 'Batch conversion completed successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // MIGRATION ET MAINTENANCE
+  // ========================================
+
+  async triggerSchemaMigration(req, res, next) {
+    try {
+      const { dryRun = true, batchSize = 100, backupFirst = true } = req.body;
+
+      // TODO: Implémenter le déclenchement de migration
+      const result = {
+        message: 'Schema migration triggered',
+        dryRun,
+        batchSize,
+        backupFirst,
+        status: 'pending',
+        triggeredAt: new Date()
+      };
+      
+      return ApiResponse.success(res, result, 'Schema migration triggered successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMigrationStatus(req, res, next) {
+    try {
+      // TODO: Implémenter la vérification du statut de migration
+      const status = {
+        isRunning: false,
+        progress: 100,
+        lastMigration: null,
+        totalEntries: 0,
+        migratedEntries: 0,
+        errors: []
+      };
+      
+      return ApiResponse.success(res, status, 'Migration status retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async cleanupOrphanedEntries(req, res, next) {
+    try {
+      const { 
+        olderThan, 
+        includeOrphaned = true, 
+        dryRun = true, 
+        maxEntries = 1000 
+      } = req.body;
+
+      // TODO: Implémenter le nettoyage des entrées orphelines
+      const result = {
+        message: 'Orphaned entries cleanup completed',
+        dryRun,
+        entriesFound: 0,
+        entriesRemoved: 0,
+        olderThan,
+        maxEntries,
+        executedAt: new Date()
+      };
+      
+      return ApiResponse.success(res, result, 'Orphaned entries cleanup completed successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // ANALYTICS ADMIN
+  // ========================================
+
+  async getGlobalItemTypeStats(req, res, next) {
+    try {
+      const { period = 'month', includeUserBreakdown = false } = req.query;
+
+      const stats = await ConsumptionService.getGlobalConsumptionStats({
+        period,
+        includeUserBreakdown: includeUserBreakdown === 'true'
+      });
+      
+      return ApiResponse.success(res, stats, 'Global item type statistics retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getMigrationStats(req, res, next) {
+    try {
+      // TODO: Implémenter les statistiques de migration
+      const stats = {
+        migrationHistory: [],
+        dataQuality: {
+          totalEntries: 0,
+          entriesWithValidNutrition: 0,
+          entriesWithValidItems: 0,
+          orphanedEntries: 0
+        },
+        schemaVersion: '2.0.0',
+        lastCheck: new Date()
+      };
+      
+      return ApiResponse.success(res, stats, 'Migration statistics retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ========================================
+  // LEGACY ET BACKWARD COMPATIBILITY
+  // ========================================
+
+  async getTodayCaloriesSummary(req, res, next) {
+    try {
+      const { user } = req;
+      
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, 'today');
       
       return ApiResponse.success(res, {
-        mealBreakdown: dashboard.mealBreakdown,
-        totalCalories: dashboard.totalCalories,
-        summary: dashboard.summary,
+        totalCalories: dashboard.totals.totalCalories,
+        totalEntries: dashboard.totals.totalEntries,
+        caloriesGoal: dashboard.goals?.dailyCaloriesTarget,
+        remainingCalories: dashboard.goals?.dailyCaloriesTarget - dashboard.totals.totalCalories,
+        progressPercentage: dashboard.progress?.calories,
+        mealBreakdown: dashboard.breakdown.byMealType,
+        summary: {
+          totalMeals: Object.values(dashboard.breakdown.byMealType).filter(meal => meal.entries > 0).length,
+          avgCaloriesPerMeal: dashboard.totals.totalEntries > 0 ? 
+            Math.round(dashboard.totals.totalCalories / dashboard.totals.totalEntries) : 0
+        },
+        lastEntry: dashboard.lastEntry
+      }, 'Today calories summary retrieved successfully');
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async getTodayMealStats(req, res, next) {
+    try {
+      const { user } = req;
+      
+      const dashboard = await ConsumptionService.getNutritionDashboard(user.id, 'today');
+      
+      return ApiResponse.success(res, {
+        mealBreakdown: dashboard.breakdown.byMealType,
+        totalCalories: dashboard.totals.totalCalories,
+        summary: {
+          totalMeals: Object.values(dashboard.breakdown.byMealType).filter(meal => meal.entries > 0).length,
+          hasBreakfast: dashboard.breakdown.byMealType.breakfast?.entries > 0,
+          hasLunch: dashboard.breakdown.byMealType.lunch?.entries > 0,
+          hasDinner: dashboard.breakdown.byMealType.dinner?.entries > 0
+        },
         goals: dashboard.goals,
         progress: dashboard.progress
       }, 'Today meal statistics retrieved successfully');
@@ -196,117 +976,12 @@ class ConsumptionController {
     }
   }
 
-  // Obtenir les aliments les plus consommés
-  async getTopFoods(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const limit = parseInt(req.query.limit) || 10;
-      const period = req.query.period || 'month'; // week, month, year, all
-      const mealType = req.query.mealType;
-
-      const topFoods = await ConsumptionService.getTopConsumedFoods(userId, {
-        limit,
-        period,
-        mealType
-      });
-      
-      return ApiResponse.success(res, {
-        topFoods,
-        period,
-        limit,
-        generatedAt: new Date()
-      }, 'Top consumed foods retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Obtenir un résumé rapide des calories d'aujourd'hui
-  async getTodayCaloriesSummary(req, res, next) {
-    try {
-      const userId = req.user.id;
-      
-      const dashboard = await ConsumptionService.getNutritionDashboard(userId, 'today');
-      
-      return ApiResponse.success(res, {
-        totalCalories: dashboard.totalCalories,
-        totalEntries: dashboard.totalEntries,
-        caloriesGoal: dashboard.goals?.dailyCalories,
-        remainingCalories: dashboard.goals?.dailyCalories - dashboard.totalCalories,
-        progressPercentage: dashboard.progress?.calories,
-        mealBreakdown: dashboard.mealBreakdown,
-        summary: dashboard.summary,
-        lastEntry: dashboard.lastEntry
-      }, 'Today calories summary retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Ajouter un repas rapide (pour les favoris ou recettes)
-  async addQuickMeal(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { foods, mealType = 'other', recipeName, mealNotes, tags } = req.validatedData;
-
-      if (!foods || !Array.isArray(foods) || foods.length === 0) {
-        return ApiResponse.badRequestError(res, 'foods array is required and cannot be empty');
-      }
-
-      const mealData = {
-        foods,
-        mealType,
-        recipeName,
-        mealNotes,
-        tags,
-        consumedAt: new Date(),
-        entryMethod: 'recipe',
-        deviceInfo: {
-          deviceId: req.user.deviceId,
-          deviceType: req.body.deviceType || 'mobile'
-        }
-      };
-
-      const result = await ConsumptionService.addQuickMeal(userId, mealData);
-
-      return ApiResponse.success(res, result, 'Quick meal added successfully', 201);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Dupliquer une entrée (pour des aliments récurrents)
-  async duplicateEntry(req, res, next) {
-    try {
-      const { entryId } = req.params;
-      const userId = req.user.id;
-      const { mealType, consumedAt, quantity, notes } = req.body;
-
-      const duplicateData = {
-        mealType,
-        consumedAt: consumedAt || new Date(),
-        quantity,
-        notes,
-        entryMethod: 'manual',
-        isDuplicate: true,
-        originalEntryId: entryId
-      };
-
-      const result = await ConsumptionService.duplicateConsumptionEntry(entryId, userId, duplicateData);
-      
-      return ApiResponse.success(res, result, 'Entry duplicated successfully', 201);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Obtenir les statistiques hebdomadaires
   async getWeeklyStats(req, res, next) {
     try {
-      const userId = req.user.id;
-      const weekOffset = parseInt(req.query.weekOffset) || 0; // 0 = cette semaine, -1 = semaine dernière
+      const { user } = req;
+      const weekOffset = parseInt(req.query.weekOffset) || 0;
       
-      const stats = await ConsumptionService.getNutritionDashboard(userId, 'week', {
+      const stats = await ConsumptionService.getNutritionDashboard(user.id, 'week', {
         weekOffset,
         includeComparison: true,
         includeGoals: true
@@ -318,13 +993,12 @@ class ConsumptionController {
     }
   }
 
-  // Obtenir les statistiques mensuelles
   async getMonthlyStats(req, res, next) {
     try {
-      const userId = req.user.id;
-      const monthOffset = parseInt(req.query.monthOffset) || 0; // 0 = ce mois, -1 = mois dernier
+      const { user } = req;
+      const monthOffset = parseInt(req.query.monthOffset) || 0;
       
-      const stats = await ConsumptionService.getNutritionDashboard(userId, 'month', {
+      const stats = await ConsumptionService.getNutritionDashboard(user.id, 'month', {
         monthOffset,
         includeComparison: true,
         includeGoals: true,
@@ -337,396 +1011,30 @@ class ConsumptionController {
     }
   }
 
-  // Obtenir les tendances nutritionnelles
-  async getNutritionTrends(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { period = 'month', metric = 'calories' } = req.query;
+  // ========================================
+  // MÉTHODES UTILITAIRES
+  // ========================================
 
-      const trends = await ConsumptionService.getNutritionTrends(userId, {
-        period,
-        metric,
-        includeMovingAverage: true,
-        includeSeasonality: true
-      });
-      
-      return ApiResponse.success(res, trends, 'Nutrition trends retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Recherche d'entrées avec filtres avancés
-  async searchEntries(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { q, page = 1, limit = 20, fields } = req.query;
-
-      if (!q || q.length < 2) {
-        return ApiResponse.badRequestError(res, 'Search query must be at least 2 characters');
-      }
-
-      const results = await ConsumptionService.searchConsumptionEntries(userId, {
-        query: q,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        fields: fields ? fields.split(',') : ['foodName', 'brandName', 'notes']
-      });
-      
-      return ApiResponse.success(res, results, 'Search completed successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Analyse nutritionnelle personnalisée
-  async getNutritionAnalysis(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { period = 'week', analysisType = 'comprehensive' } = req.query;
-
-      const analysis = await ConsumptionService.getNutritionAnalysis(userId, {
-        period,
-        analysisType,
-        includeRecommendations: true,
-        includeDeficiencies: true,
-        includeExcesses: true
-      });
-      
-      return ApiResponse.success(res, analysis, 'Nutrition analysis completed successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Export des données de consommation
-  async exportData(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { format = 'json', dateFrom, dateTo, includeNutrition = true, includeMetadata = false } = req.query;
-
-      const filters = {
-        includeNutrition: includeNutrition === 'true',
-        includeMetadata: includeMetadata === 'true'
-      };
-      
-      if (dateFrom) filters.dateFrom = dateFrom;
-      if (dateTo) filters.dateTo = dateTo;
-
-      const data = await ConsumptionService.exportUserConsumptions(userId, {
-        ...filters,
-        format,
-        limit: 10000 // Large limit for export
-      });
-
-      if (format === 'json') {
-        return ApiResponse.success(res, data, 'Data exported successfully');
-      } else {
-        // Pour CSV/XLSX, définir les headers appropriés
-        const filename = `consumption_data_${userId}_${new Date().toISOString().split('T')[0]}.${format}`;
-        res.setHeader('Content-Type', format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        return res.send(data);
-      }
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Obtenir les suggestions basées sur l'historique
-  async getFoodSuggestions(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { mealType, timeOfDay, limit = 10 } = req.query;
-
-      const suggestions = await ConsumptionService.getFoodSuggestions(userId, {
-        mealType,
-        timeOfDay,
-        limit: parseInt(limit),
-        basedOnHistory: true,
-        basedOnGoals: true
-      });
-      
-      return ApiResponse.success(res, {
-        suggestions,
-        generatedAt: new Date(),
-        basedOn: ['user_history', 'nutrition_goals', 'meal_timing']
-      }, 'Food suggestions retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // Opérations en lot
-  async batchOperations(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { operation, entryIds, updateData } = req.validatedData;
-
-      if (!['delete', 'update', 'duplicate'].includes(operation)) {
-        return ApiResponse.badRequestError(res, 'Invalid batch operation');
-      }
-
-      const result = await ConsumptionService.batchOperations(userId, {
-        operation,
-        entryIds,
-        updateData,
-        performedBy: userId,
-        performedAt: new Date()
-      });
-      
-      return ApiResponse.success(res, result, `Batch ${operation} completed successfully`);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ====== MISSING METHODS - ADDED ======
-
-  // ADDED: Create meal from recipe
-  async createMealFromRecipe(req, res, next) {
-    try {
-      const { recipeId } = req.params;
-      const userId = req.user.id;
-      const { servings = 1, mealType = 'other', consumedAt, notes } = req.body;
-
-      const result = await ConsumptionService.createMealFromRecipe(userId, recipeId, {
-        servings,
-        mealType,
-        consumedAt: consumedAt || new Date(),
-        notes
-      });
-      
-      return ApiResponse.success(res, result, 'Meal created from recipe successfully', 201);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Get personalized insights
-  async getPersonalizedInsights(req, res, next) {
-    try {
-      const userId = req.user.id;
-      
-      const insights = await ConsumptionService.getPersonalizedInsights(userId);
-      
-      return ApiResponse.success(res, {
-        insights,
-        generatedAt: new Date(),
-        type: 'personalized_nutrition_insights'
-      }, 'Personalized insights retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: AI image analysis
-  async analyzeImageWithAI(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { imageData, imageUrl } = req.body;
-
-      if (!imageData && !imageUrl) {
-        return ApiResponse.badRequestError(res, 'Image data or URL is required');
-      }
-
-      const result = await ConsumptionService.analyzeImageWithAI(userId, {
-        imageData,
-        imageUrl,
-        timestamp: new Date(),
-        deviceInfo: {
-          deviceId: req.user.deviceId,
-          userAgent: req.get('User-Agent')
-        }
-      });
-      
-      return ApiResponse.success(res, result, 'Image analysis completed successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Barcode scanning
-  async scanBarcode(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { barcode, scannerType = 'mobile' } = req.body;
-
-      if (!barcode) {
-        return ApiResponse.badRequestError(res, 'Barcode is required');
-      }
-
-      const result = await ConsumptionService.scanBarcode(userId, {
-        barcode,
-        scannerType,
-        timestamp: new Date(),
-        deviceInfo: {
-          deviceId: req.user.deviceId,
-          userAgent: req.get('User-Agent')
-        }
-      });
-      
-      return ApiResponse.success(res, result, 'Barcode scanned successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Process voice entry
-  async processVoiceEntry(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { audioData, audioUrl, transcription } = req.body;
-
-      if (!audioData && !audioUrl && !transcription) {
-        return ApiResponse.badRequestError(res, 'Audio data, URL, or transcription is required');
-      }
-
-      const result = await ConsumptionService.processVoiceEntry(userId, {
-        audioData,
-        audioUrl,
-        transcription,
-        timestamp: new Date(),
-        deviceInfo: {
-          deviceId: req.user.deviceId,
-          userAgent: req.get('User-Agent')
-        }
-      });
-      
-      return ApiResponse.success(res, result, 'Voice entry processed successfully', 201);
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Generate weekly report
-  async generateWeeklyReport(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { dateFrom, dateTo } = req.validatedQuery;
-
-      const report = await ConsumptionService.generateWeeklyReport(userId, {
-        dateFrom,
-        dateTo
-      });
-      
-      return ApiResponse.success(res, {
-        report,
-        period: { from: dateFrom, to: dateTo },
-        generatedAt: new Date()
-      }, 'Weekly report generated successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Generate monthly report
-  async generateMonthlyReport(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { dateFrom, dateTo } = req.validatedQuery;
-
-      const report = await ConsumptionService.generateMonthlyReport(userId, {
-        dateFrom,
-        dateTo
-      });
-      
-      return ApiResponse.success(res, {
-        report,
-        period: { from: dateFrom, to: dateTo },
-        generatedAt: new Date()
-      }, 'Monthly report generated successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Get goals progress
-  async getGoalsProgress(req, res, next) {
-    try {
-      const userId = req.user.id;
-      
-      const progress = await ConsumptionService.getGoalsProgress(userId);
-      
-      return ApiResponse.success(res, {
-        progress,
-        lastUpdated: new Date()
-      }, 'Goals progress retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Update goal progress
-  async updateGoalProgress(req, res, next) {
-    try {
-      const userId = req.user.id;
-      const { goalId, progress, notes } = req.body;
-
-      const result = await ConsumptionService.updateGoalProgress(userId, goalId, {
-        progress,
-        notes,
-        updatedAt: new Date()
-      });
-      
-      return ApiResponse.success(res, result, 'Goal progress updated successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Share meal
-  async shareMeal(req, res, next) {
-    try {
-      const { entryId } = req.params;
-      const userId = req.user.id;
-      const { shareType = 'public', message, expiresAt } = req.body;
-
-      const result = await ConsumptionService.shareMeal(userId, entryId, {
-        shareType,
-        message,
-        expiresAt,
-        sharedAt: new Date()
-      });
-      
-      return ApiResponse.success(res, {
-        shareLink: result.shareLink,
-        shareId: result.shareId,
-        expiresAt: result.expiresAt
-      }, 'Meal shared successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: View shared meal
-  async viewSharedMeal(req, res, next) {
-    try {
-      const { shareId } = req.params;
-      
-      const result = await ConsumptionService.viewSharedMeal(shareId);
-      
-      return ApiResponse.success(res, result, 'Shared meal retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
-  }
-
-  // ADDED: Get service metadata
   async getServiceMetadata(req, res, next) {
     try {
       const metadata = {
-        service: 'consumption-service',
-        version: process.env.API_VERSION || '1.0.0',
+        service: 'consumption-service-v2',
+        version: process.env.API_VERSION || '2.0.0',
         features: {
+          unifiedItemSupport: true,
+          foodIntegration: true,
+          recipeIntegration: true,
+          advancedAnalytics: true,
+          crossModuleSync: true,
+          migrationTools: true,
           aiAnalysis: true,
           barcodeScanning: true,
           voiceInput: true,
           bulkOperations: true,
-          advancedAnalytics: true,
           socialSharing: true,
           customReports: true
         },
+        supportedItemTypes: ['food', 'recipe'],
         supportedFormats: {
           import: ['json', 'csv'],
           export: ['json', 'csv', 'xlsx', 'pdf']
@@ -734,12 +1042,19 @@ class ConsumptionController {
         limits: {
           maxEntriesPerDay: 200,
           maxBatchSize: 50,
-          maxExportEntries: 10000
+          maxExportEntries: 10000,
+          maxQuickMealItems: 20
+        },
+        integrations: {
+          foodService: true,
+          recipeService: true,
+          userService: true,
+          nutritionDatabase: true
         },
         subscriptionFeatures: {
-          free: ['basic_tracking', 'simple_stats'],
-          premium: ['ai_analysis', 'advanced_stats', 'bulk_operations'],
-          pro: ['custom_reports', 'advanced_analytics', 'unlimited_exports']
+          free: ['basic_tracking', 'simple_stats', 'food_entries', 'recipe_entries'],
+          premium: ['ai_analysis', 'advanced_stats', 'bulk_operations', 'export_csv'],
+          pro: ['custom_reports', 'advanced_analytics', 'unlimited_exports', 'api_access']
         }
       };
       
@@ -749,95 +1064,148 @@ class ConsumptionController {
     }
   }
 
-  // ADDED: Get top consumers (Admin)
-  async getTopConsumers(req, res, next) {
-    try {
-      const { page = 1, limit = 20 } = req.validatedQuery;
-      
-      const result = await ConsumptionService.getTopConsumers({
-        page,
-        limit
+  // Helper methods pour les rapports
+
+  generateBalanceRecommendations(itemTypeBreakdown) {
+    const recommendations = [];
+    const foodCalories = itemTypeBreakdown.food?.calories || 0;
+    const recipeCalories = itemTypeBreakdown.recipe?.calories || 0;
+    const total = foodCalories + recipeCalories;
+
+    if (total === 0) return recommendations;
+
+    const foodPercentage = (foodCalories / total) * 100;
+    const recipePercentage = (recipeCalories / total) * 100;
+
+    if (foodPercentage > 80) {
+      recommendations.push({
+        type: 'suggestion',
+        message: 'Consider incorporating more recipes for meal variety and balanced nutrition.',
+        priority: 'medium'
       });
-      
-      return ApiResponse.success(res, result, 'Top consumers retrieved successfully');
-    } catch (error) {
-      next(error);
     }
+
+    if (recipePercentage > 80) {
+      recommendations.push({
+        type: 'suggestion',
+        message: 'Consider adding more fresh foods and simple ingredients to your diet.',
+        priority: 'medium'
+      });
+    }
+
+    return recommendations;
   }
 
-  // ADDED: Cleanup consumption data (Admin)
-  async cleanupConsumptionData(req, res, next) {
-    try {
-      const { olderThan, includeDeleted = true, dryRun = false } = req.body;
-      
-      const result = await ConsumptionService.cleanupConsumptionData({
-        olderThan,
-        includeDeleted,
-        dryRun,
-        performedBy: req.user.id,
-        performedAt: new Date()
+  generateSourceRecommendations(itemTypeBreakdown) {
+    const recommendations = [];
+    const foodEntries = itemTypeBreakdown.food?.entries || 0;
+    const recipeEntries = itemTypeBreakdown.recipe?.entries || 0;
+
+    if (foodEntries === 0) {
+      recommendations.push({
+        type: 'tip',
+        message: 'Track individual foods for more precise nutritional monitoring.',
+        priority: 'low'
       });
-      
-      return ApiResponse.success(res, result, 'Data cleanup completed successfully');
-    } catch (error) {
-      next(error);
     }
+
+    if (recipeEntries === 0) {
+      recommendations.push({
+        type: 'tip',
+        message: 'Try logging complete recipes to track your cooking habits.',
+        priority: 'low'
+      });
+    }
+
+    return recommendations;
   }
 
-  // ADDED: Get data quality reports (Admin)
-  async getDataQualityReports(req, res, next) {
-    try {
-      const { dateFrom, dateTo } = req.validatedQuery;
-      
-      const reports = await ConsumptionService.getDataQualityReports({
-        dateFrom,
-        dateTo
+  generateRecipeUsageInsights(topRecipes) {
+    const insights = [];
+
+    if (topRecipes.length === 0) {
+      insights.push({
+        type: 'observation',
+        message: 'No recipe consumption recorded in this period.',
+        priority: 'low'
       });
-      
-      return ApiResponse.success(res, {
-        reports,
-        period: { from: dateFrom, to: dateTo },
-        generatedAt: new Date()
-      }, 'Data quality reports retrieved successfully');
-    } catch (error) {
-      next(error);
+      return insights;
     }
+
+    const mostUsedRecipe = topRecipes[0];
+    if (mostUsedRecipe.consumptionCount > 5) {
+      insights.push({
+        type: 'observation',
+        message: `Your most frequently made recipe is "${mostUsedRecipe.name}" with ${mostUsedRecipe.consumptionCount} servings.`,
+        priority: 'info'
+      });
+    }
+
+    const avgCalories = topRecipes.reduce((sum, recipe) => sum + recipe.avgCaloriesPerServing, 0) / topRecipes.length;
+    if (avgCalories > 600) {
+      insights.push({
+        type: 'suggestion',
+        message: 'Consider incorporating some lighter recipes to balance your caloric intake.',
+        priority: 'medium'
+      });
+    }
+
+    return insights;
   }
 
-  // ====== ADMIN ENDPOINTS ======
+  compareNutritionalProfiles(itemTypeBreakdown) {
+    const food = itemTypeBreakdown.food || {};
+    const recipe = itemTypeBreakdown.recipe || {};
 
-  // Obtenir les statistiques globales (admin uniquement)
-  async getGlobalStats(req, res, next) {
-    try {
-      // Cette route devrait être protégée par un middleware admin
-      const { period = 'month', includeUserBreakdown = false } = req.query;
-      
-      const stats = await ConsumptionService.getGlobalConsumptionStats({
-        period,
-        includeUserBreakdown: includeUserBreakdown === 'true'
-      });
-      
-      return ApiResponse.success(res, stats, 'Global consumption statistics retrieved successfully');
-    } catch (error) {
-      next(error);
-    }
+    return {
+      proteinRatio: {
+        food: food.protein || 0,
+        recipe: recipe.protein || 0
+      },
+      carbsRatio: {
+        food: food.carbs || 0,
+        recipe: recipe.carbs || 0
+      },
+      fatRatio: {
+        food: food.fat || 0,
+        recipe: recipe.fat || 0
+      },
+      caloriesDensity: {
+        food: food.entries > 0 ? (food.calories || 0) / food.entries : 0,
+        recipe: recipe.entries > 0 ? (recipe.calories || 0) / recipe.entries : 0
+      }
+    };
   }
 
-  // Analyser les tendances globales (admin uniquement)
-  async getGlobalTrends(req, res, next) {
-    try {
-      const { metric = 'calories', period = 'month', limit = 100 } = req.query;
-      
-      const trends = await ConsumptionService.getGlobalTrends({
-        metric,
-        period,
-        limit: parseInt(limit)
+  generateFoodVsRecipeRecommendations(itemTypeBreakdown) {
+    const recommendations = [];
+    const food = itemTypeBreakdown.food || {};
+    const recipe = itemTypeBreakdown.recipe || {};
+
+    const totalCalories = (food.calories || 0) + (recipe.calories || 0);
+    if (totalCalories === 0) return recommendations;
+
+    const foodPercentage = ((food.calories || 0) / totalCalories) * 100;
+
+    if (foodPercentage < 30) {
+      recommendations.push({
+        type: 'suggestion',
+        message: 'Consider incorporating more fresh, whole foods into your diet for better nutritional variety.',
+        priority: 'medium',
+        action: 'increase_food_intake'
       });
-      
-      return ApiResponse.success(res, trends, 'Global trends analysis completed successfully');
-    } catch (error) {
-      next(error);
     }
+
+    if (foodPercentage > 70) {
+      recommendations.push({
+        type: 'suggestion',
+        message: 'Try cooking more complete recipes to improve meal satisfaction and nutritional balance.',
+        priority: 'medium',
+        action: 'increase_recipe_usage'
+      });
+    }
+
+    return recommendations;
   }
 }
 

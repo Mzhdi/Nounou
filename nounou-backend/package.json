@@ -31,7 +31,15 @@
         "pm2:stop": "pm2 stop ecosystem.config.js",
         "pm2:restart": "pm2 restart ecosystem.config.js",
         "docker:build": "docker build -t nounou-api .",
-        "docker:run": "docker run -p 3000:3000 nounou-api"
+        "docker:run": "docker run -p 3000:3000 nounou-api",
+        "start": "npm run swagger-gen && node server.js",
+        "dev": "npm run swagger-gen && nodemon server.js",
+        "swagger-gen": "node swagger-gen.js",
+        "swagger-only": "node swagger-gen.js && echo '✅ Swagger docs generated! Visit http://localhost:3000/api-docs'",
+        "swagger-watch": "nodemon swagger-gen.js",
+        "test": "npm run swagger-gen && npm test",
+        "build": "npm run swagger-gen && echo 'Build complete with documentation'",
+        "docs": "npm run swagger-gen && echo 'Documentation generated at /api-docs'"
     },
     "keywords": [
         "nutrition",
@@ -90,6 +98,9 @@
         "pdfkit": "^0.13.0",
         "redis": "^4.6.10",
         "sharp": "^0.32.6",
+        "swagger-autogen": "^2.23.7",
+        "swagger-jsdoc": "^6.2.8",
+        "swagger-ui-express": "^5.0.1",
         "uuid": "^9.0.1",
         "winston": "^3.11.0",
         "xss-clean": "^0.1.4"

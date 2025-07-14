@@ -7,6 +7,9 @@ const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
 
+// ✨ AUTOMATED: Import Swagger UI only (no manual setup needed)
+const swaggerUi = require('swagger-ui-express');
+
 // Import configurations and utilities
 const config = require('./config/env');
 const database = require('./config/database');
@@ -17,23 +20,41 @@ const { rateLimiter } = require('./middleware/rateLimiter');
 const userRoutes = require('./routes/userRoutes');
 const consumptionRoutes = require('./routes/consumptionRoutes');
 const foodRoutes = require('./routes/foodRoutes');
-const recipeRoutes = require('./routes/recipeRoutes'); // ✨ NOUVEAU
+const recipeRoutes = require('./routes/recipeRoutes');
 
 // Create Express application
 const app = express();
 
+// ✨ AUTOMATED: Load auto-generated swagger documentation
+let swaggerDocument;
+try {
+  swaggerDocument = require('./swagger-output.json');
+  console.log('✅ Swagger documentation loaded automatically');
+} catch (error) {
+  console.warn('⚠️ Swagger documentation not found. Run "npm run swagger-gen" to generate it.');
+  swaggerDocument = {
+    openapi: '3.0.0',
+    info: {
+      title: 'Nounou Nutrition API',
+      version: '2.0.0',
+      description: 'API documentation not generated yet. Run npm run swagger-gen'
+    },
+    paths: {}
+  };
+}
+
 // ========== SECURITY MIDDLEWARE ==========
 
-// Set security headers
+// Set security headers - Updated for Swagger UI
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // Needed for Swagger UI
+      imgSrc: ["'self'", "data:", "https:", "https://validator.swagger.io"],
       connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", "https://fonts.gstatic.com"],
       objectSrc: ["'none'"],
       mediaSrc: ["'self'"],
       frameSrc: ["'none'"],
@@ -155,9 +176,68 @@ app.use((req, res, next) => {
   next();
 });
 
+// ✨ AUTOMATED: Swagger UI with auto-generated docs
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument, {
+  explorer: true,
+  customCss: `
+    .swagger-ui .topbar { display: none }
+    .swagger-ui .info { margin: 50px 0 }
+    .swagger-ui .scheme-container { background: #fafafa; padding: 30px 0 }
+    .swagger-ui .info .title { color: #4CAF50; }
+  `,
+  customSiteTitle: 'Nounou Nutrition API Documentation',
+  swaggerOptions: {
+    persistAuthorization: true,
+    displayRequestDuration: true,
+    docExpansion: 'list',
+    filter: true,
+    showExtensions: true,
+    showCommonExtensions: true,
+    tryItOutEnabled: true,
+    defaultModelsExpandDepth: 2,
+    defaultModelExpandDepth: 2,
+    requestInterceptor: (req) => {
+      // Add custom headers if needed
+      if (req.url.includes('/api/v1/')) {
+        req.headers['X-App-Version'] = '2.0.0';
+      }
+      return req;
+    }
+  }
+}));
+
+// ✨ AUTOMATED: Raw swagger JSON endpoint
+app.get('/api-docs.json', (req, res) => {
+  res.setHeader('Content-Type', 'application/json');
+  res.send(swaggerDocument);
+});
+
 // ========== HEALTH CHECK ==========
 
 app.get('/health', async (req, res) => {
+  /* 
+    #swagger.tags = ['Health']
+    #swagger.summary = 'Health check endpoint'
+    #swagger.description = 'Returns the current health status of the API server with database and service information'
+    #swagger.responses[200] = {
+      description: 'Server is healthy',
+      schema: { $ref: '#/definitions/HealthCheck' }
+    }
+    #swagger.responses[503] = {
+      description: 'Server is unhealthy',
+      schema: { 
+        allOf: [
+          { $ref: '#/definitions/HealthCheck' },
+          { 
+            type: 'object',
+            properties: {
+              error: { type: 'string' }
+            }
+          }
+        ]
+      }
+    }
+  */
   try {
     const dbStatus = await database.healthCheck();
     
@@ -166,10 +246,24 @@ app.get('/health', async (req, res) => {
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       environment: config.NODE_ENV,
-      version: process.env.npm_package_version || '1.0.0',
+      version: process.env.npm_package_version || '2.0.0',
       node: process.version,
       memory: process.memoryUsage(),
-      database: dbStatus
+      database: dbStatus,
+      features: {
+        unifiedItemSupport: true,
+        foodIntegration: true,
+        recipeIntegration: true,
+        advancedAnalytics: true,
+        crossModuleSync: true,
+        migrationTools: true
+      },
+      integrations: {
+        foodService: true,
+        recipeService: true,
+        userService: true,
+        consumptionService: true
+      }
     };
 
     res.status(200).json(healthCheck);
@@ -184,9 +278,37 @@ app.get('/health', async (req, res) => {
 
 // Root endpoint
 app.get('/', (req, res) => {
+  /* 
+    #swagger.tags = ['Health']
+    #swagger.summary = 'API root endpoint'
+    #swagger.description = 'Returns basic API information and available endpoints'
+    #swagger.responses[200] = {
+      description: 'API information',
+      schema: {
+        type: 'object',
+        properties: {
+          message: { type: 'string', example: 'Nounou Nutrition API - MongoDB Version' },
+          version: { type: 'string', example: '2.0.0' },
+          environment: { type: 'string', example: 'development' },
+          timestamp: { type: 'string', format: 'date-time' },
+          endpoints: {
+            type: 'object',
+            properties: {
+              health: { type: 'string', example: '/health' },
+              docs: { type: 'string', example: '/api-docs' },
+              users: { type: 'string', example: '/api/v1/users' },
+              foods: { type: 'string', example: '/api/v1/foods' },
+              recipes: { type: 'string', example: '/api/v1/recipes' },
+              consumption: { type: 'string', example: '/api/v1/consumption' }
+            }
+          }
+        }
+      }
+    }
+  */
   res.json({
     message: 'Nounou Nutrition API - MongoDB Version',
-    version: process.env.npm_package_version || '1.0.0',
+    version: process.env.npm_package_version || '2.0.0',
     environment: config.NODE_ENV,
     timestamp: new Date().toISOString(),
     endpoints: {
@@ -194,8 +316,16 @@ app.get('/', (req, res) => {
       users: '/api/v1/users',
       consumption: '/api/v1/consumption',
       foods: '/api/v1/foods',
-      recipes: '/api/v1/recipes', // ✨ NOUVEAU
-      docs: '/api/docs'
+      recipes: '/api/v1/recipes',
+      docs: '/api-docs',
+      'docs-json': '/api-docs.json'
+    },
+    features: {
+      unifiedConsumption: true,
+      foodDatabase: true,
+      recipeManagement: true,
+      advancedAnalytics: true,
+      userAuthentication: true
     }
   });
 });
@@ -208,73 +338,11 @@ const API_VERSION = config.API_VERSION || 'v1';
 app.use(`/api/${API_VERSION}/users`, userRoutes);
 app.use(`/api/${API_VERSION}/consumption`, consumptionRoutes);
 app.use(`/api/${API_VERSION}/foods`, foodRoutes);
-app.use(`/api/${API_VERSION}/recipes`, recipeRoutes); // ✨ NOUVEAU
+app.use(`/api/${API_VERSION}/recipes`, recipeRoutes);
 
-// API documentation endpoint (placeholder)
+// Legacy API docs redirect
 app.get('/api/docs', (req, res) => {
-  res.json({
-    message: 'API Documentation',
-    version: API_VERSION,
-    baseUrl: `/api/${API_VERSION}`,
-    endpoints: {
-      users: {
-        'POST /users/register': 'Register a new user',
-        'POST /users/login': 'Login user',
-        'GET /users/profile': 'Get user profile',
-        'PUT /users/profile': 'Update user profile',
-        'POST /users/logout': 'Logout user',
-        'GET /users/sessions': 'Get active sessions',
-        'GET /users/goals': 'Get user goals',
-        'POST /users/goals': 'Create/update goal'
-      },
-      consumption: {
-        'POST /consumption/entries': 'Create consumption entry',
-        'GET /consumption/entries': 'Get user entries',
-        'GET /consumption/dashboard': 'Get nutrition dashboard',
-        'GET /consumption/stats/today': 'Get today\'s stats',
-        'POST /consumption/meals/quick': 'Add quick meal',
-        'GET /consumption/export': 'Export consumption data'
-      },
-      foods: {
-        'POST /foods': 'Create new food item',
-        'GET /foods': 'List foods with filters',
-        'GET /foods/search': 'Search foods by text',
-        'GET /foods/barcode/:barcode': 'Get food by barcode',
-        'GET /foods/:foodId': 'Get food details',
-        'PUT /foods/:foodId': 'Update food',
-        'DELETE /foods/:foodId': 'Delete food (soft)',
-        'GET /foods/categories': 'List food categories',
-        'GET /foods/categories/tree': 'Category hierarchy'
-      },
-      // ✨ NOUVEAU - Documentation Recipes
-      recipes: {
-        'GET /recipes': 'List recipes with filters',
-        'POST /recipes': 'Create new recipe',
-        'GET /recipes/search': 'Search recipes by text',
-        'GET /recipes/my-recipes': 'Get user\'s recipes',
-        'GET /recipes/public': 'Get public recipes',
-        'POST /recipes/complete': 'Create complete recipe',
-        'GET /recipes/:recipeId': 'Get recipe details',
-        'PUT /recipes/:recipeId': 'Update recipe',
-        'DELETE /recipes/:recipeId': 'Delete recipe',
-        'GET /recipes/:recipeId/nutrition': 'Get recipe nutrition',
-        'GET /recipes/:recipeId/ingredients': 'Get recipe ingredients',
-        'POST /recipes/:recipeId/ingredients': 'Add ingredient to recipe',
-        'PUT /recipes/ingredients/:ingredientId': 'Update recipe ingredient',
-        'DELETE /recipes/ingredients/:ingredientId': 'Remove recipe ingredient',
-        'POST /recipes/:recipeId/instructions': 'Add instruction to recipe',
-        'PUT /recipes/instructions/:instructionId': 'Update recipe instruction',
-        'DELETE /recipes/instructions/:instructionId': 'Remove recipe instruction',
-        'GET /recipes/categories': 'List recipe categories',
-        'POST /recipes/categories': 'Create recipe category',
-        'GET /recipes/categories/:categoryId': 'Get recipe category',
-        'PUT /recipes/categories/:categoryId': 'Update recipe category',
-        'DELETE /recipes/categories/:categoryId': 'Delete recipe category',
-        'GET /recipes/categories/:categoryId/breadcrumb': 'Get category breadcrumb',
-        'GET /recipes/categories/:categoryId/stats': 'Get category statistics'
-      }
-    }
-  });
+  res.redirect('/api-docs');
 });
 
 // ========== ERROR HANDLING MIDDLEWARE ==========
