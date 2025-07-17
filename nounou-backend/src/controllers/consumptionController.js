@@ -363,7 +363,7 @@ class ConsumptionController {
           recipePercentage: dashboard.totals.totalCalories > 0 ? 
             Math.round(((dashboard.breakdown.byItemType.recipe?.calories || 0) / dashboard.totals.totalCalories) * 100) : 0
         },
-        recommendations: this.generateBalanceRecommendations(dashboard.breakdown.byItemType)
+        recommendations: generateBalanceRecommendations(dashboard.breakdown.byItemType)
       };
       
       return ApiResponse.success(res, balance, 'Nutrition balance analysis retrieved successfully');
@@ -606,7 +606,7 @@ class ConsumptionController {
           recipePercentage: dashboard.totals.totalCalories > 0 ? 
             Math.round(((dashboard.breakdown.byItemType.recipe?.calories || 0) / dashboard.totals.totalCalories) * 100) : 0
         },
-        recommendations: this.generateSourceRecommendations(dashboard.breakdown.byItemType),
+        recommendations: generateSourceRecommendations(dashboard.breakdown.byItemType),
         generatedAt: new Date()
       };
       
@@ -639,7 +639,7 @@ class ConsumptionController {
           averageServingsPerRecipe: topRecipes.items.length > 0 ? 
             topRecipes.items.reduce((sum, recipe) => sum + recipe.totalQuantity, 0) / topRecipes.items.length : 0
         },
-        insights: this.generateRecipeUsageInsights(topRecipes.items),
+        insights: generateRecipeUsageInsights(topRecipes.items),
         generatedAt: new Date()
       };
       
@@ -674,9 +674,9 @@ class ConsumptionController {
             foodVariety: dashboard.breakdown.byItemType.food?.entries || 0,
             recipeVariety: dashboard.breakdown.byItemType.recipe?.entries || 0
           },
-          nutritionalProfile: this.compareNutritionalProfiles(dashboard.breakdown.byItemType)
+          nutritionalProfile: compareNutritionalProfiles(dashboard.breakdown.byItemType)
         },
-        recommendations: this.generateFoodVsRecipeRecommendations(dashboard.breakdown.byItemType),
+        recommendations: generateFoodVsRecipeRecommendations(dashboard.breakdown.byItemType),
         generatedAt: new Date()
       };
       
@@ -1064,149 +1064,175 @@ class ConsumptionController {
     }
   }
 
-  // Helper methods pour les rapports
+}
 
-  generateBalanceRecommendations(itemTypeBreakdown) {
-    const recommendations = [];
-    const foodCalories = itemTypeBreakdown.food?.calories || 0;
-    const recipeCalories = itemTypeBreakdown.recipe?.calories || 0;
-    const total = foodCalories + recipeCalories;
+// ========================================
+// HELPER FUNCTIONS - MOVED OUTSIDE CLASS
+// ========================================
 
-    if (total === 0) return recommendations;
+function generateBalanceRecommendations(itemTypeBreakdown) {
+  const recommendations = [];
+  
+  if (!itemTypeBreakdown) return recommendations;
+  
+  const foodCalories = itemTypeBreakdown.food?.calories || 0;
+  const recipeCalories = itemTypeBreakdown.recipe?.calories || 0;
+  const total = foodCalories + recipeCalories;
 
-    const foodPercentage = (foodCalories / total) * 100;
-    const recipePercentage = (recipeCalories / total) * 100;
+  if (total === 0) return recommendations;
 
-    if (foodPercentage > 80) {
-      recommendations.push({
-        type: 'suggestion',
-        message: 'Consider incorporating more recipes for meal variety and balanced nutrition.',
-        priority: 'medium'
-      });
-    }
+  const foodPercentage = (foodCalories / total) * 100;
+  const recipePercentage = (recipeCalories / total) * 100;
 
-    if (recipePercentage > 80) {
-      recommendations.push({
-        type: 'suggestion',
-        message: 'Consider adding more fresh foods and simple ingredients to your diet.',
-        priority: 'medium'
-      });
-    }
-
-    return recommendations;
+  if (foodPercentage > 80) {
+    recommendations.push({
+      type: 'suggestion',
+      message: 'Consider incorporating more recipes for meal variety and balanced nutrition.',
+      priority: 'medium'
+    });
   }
 
-  generateSourceRecommendations(itemTypeBreakdown) {
-    const recommendations = [];
-    const foodEntries = itemTypeBreakdown.food?.entries || 0;
-    const recipeEntries = itemTypeBreakdown.recipe?.entries || 0;
-
-    if (foodEntries === 0) {
-      recommendations.push({
-        type: 'tip',
-        message: 'Track individual foods for more precise nutritional monitoring.',
-        priority: 'low'
-      });
-    }
-
-    if (recipeEntries === 0) {
-      recommendations.push({
-        type: 'tip',
-        message: 'Try logging complete recipes to track your cooking habits.',
-        priority: 'low'
-      });
-    }
-
-    return recommendations;
+  if (recipePercentage > 80) {
+    recommendations.push({
+      type: 'suggestion',
+      message: 'Consider adding more fresh foods and simple ingredients to your diet.',
+      priority: 'medium'
+    });
   }
 
-  generateRecipeUsageInsights(topRecipes) {
-    const insights = [];
+  return recommendations;
+}
 
-    if (topRecipes.length === 0) {
-      insights.push({
-        type: 'observation',
-        message: 'No recipe consumption recorded in this period.',
-        priority: 'low'
-      });
-      return insights;
-    }
+function generateSourceRecommendations(itemTypeBreakdown) {
+  const recommendations = [];
+  
+  if (!itemTypeBreakdown) return recommendations;
+  
+  const foodEntries = itemTypeBreakdown.food?.entries || 0;
+  const recipeEntries = itemTypeBreakdown.recipe?.entries || 0;
 
-    const mostUsedRecipe = topRecipes[0];
-    if (mostUsedRecipe.consumptionCount > 5) {
-      insights.push({
-        type: 'observation',
-        message: `Your most frequently made recipe is "${mostUsedRecipe.name}" with ${mostUsedRecipe.consumptionCount} servings.`,
-        priority: 'info'
-      });
-    }
+  if (foodEntries === 0) {
+    recommendations.push({
+      type: 'tip',
+      message: 'Track individual foods for more precise nutritional monitoring.',
+      priority: 'low'
+    });
+  }
 
-    const avgCalories = topRecipes.reduce((sum, recipe) => sum + recipe.avgCaloriesPerServing, 0) / topRecipes.length;
-    if (avgCalories > 600) {
-      insights.push({
-        type: 'suggestion',
-        message: 'Consider incorporating some lighter recipes to balance your caloric intake.',
-        priority: 'medium'
-      });
-    }
+  if (recipeEntries === 0) {
+    recommendations.push({
+      type: 'tip',
+      message: 'Try logging complete recipes to track your cooking habits.',
+      priority: 'low'
+    });
+  }
 
+  return recommendations;
+}
+
+function generateRecipeUsageInsights(topRecipes) {
+  const insights = [];
+
+  if (!topRecipes || !Array.isArray(topRecipes)) return insights;
+
+  if (topRecipes.length === 0) {
+    insights.push({
+      type: 'observation',
+      message: 'No recipe consumption recorded in this period.',
+      priority: 'low'
+    });
     return insights;
   }
 
-  compareNutritionalProfiles(itemTypeBreakdown) {
-    const food = itemTypeBreakdown.food || {};
-    const recipe = itemTypeBreakdown.recipe || {};
+  const mostUsedRecipe = topRecipes[0];
+  if (mostUsedRecipe && mostUsedRecipe.consumptionCount > 5) {
+    insights.push({
+      type: 'observation',
+      message: `Your most frequently made recipe is "${mostUsedRecipe.name || 'Unknown'}" with ${mostUsedRecipe.consumptionCount} servings.`,
+      priority: 'info'
+    });
+  }
 
+  const avgCalories = topRecipes.reduce((sum, recipe) => {
+    return sum + (recipe.avgCaloriesPerServing || 0);
+  }, 0) / topRecipes.length;
+  
+  if (avgCalories > 600) {
+    insights.push({
+      type: 'suggestion',
+      message: 'Consider incorporating some lighter recipes to balance your caloric intake.',
+      priority: 'medium'
+    });
+  }
+
+  return insights;
+}
+
+function compareNutritionalProfiles(itemTypeBreakdown) {
+  if (!itemTypeBreakdown) {
     return {
-      proteinRatio: {
-        food: food.protein || 0,
-        recipe: recipe.protein || 0
-      },
-      carbsRatio: {
-        food: food.carbs || 0,
-        recipe: recipe.carbs || 0
-      },
-      fatRatio: {
-        food: food.fat || 0,
-        recipe: recipe.fat || 0
-      },
-      caloriesDensity: {
-        food: food.entries > 0 ? (food.calories || 0) / food.entries : 0,
-        recipe: recipe.entries > 0 ? (recipe.calories || 0) / recipe.entries : 0
-      }
+      proteinRatio: { food: 0, recipe: 0 },
+      carbsRatio: { food: 0, recipe: 0 },
+      fatRatio: { food: 0, recipe: 0 },
+      caloriesDensity: { food: 0, recipe: 0 }
     };
   }
 
-  generateFoodVsRecipeRecommendations(itemTypeBreakdown) {
-    const recommendations = [];
-    const food = itemTypeBreakdown.food || {};
-    const recipe = itemTypeBreakdown.recipe || {};
+  const food = itemTypeBreakdown.food || {};
+  const recipe = itemTypeBreakdown.recipe || {};
 
-    const totalCalories = (food.calories || 0) + (recipe.calories || 0);
-    if (totalCalories === 0) return recommendations;
-
-    const foodPercentage = ((food.calories || 0) / totalCalories) * 100;
-
-    if (foodPercentage < 30) {
-      recommendations.push({
-        type: 'suggestion',
-        message: 'Consider incorporating more fresh, whole foods into your diet for better nutritional variety.',
-        priority: 'medium',
-        action: 'increase_food_intake'
-      });
+  return {
+    proteinRatio: {
+      food: food.protein || 0,
+      recipe: recipe.protein || 0
+    },
+    carbsRatio: {
+      food: food.carbs || 0,
+      recipe: recipe.carbs || 0
+    },
+    fatRatio: {
+      food: food.fat || 0,
+      recipe: recipe.fat || 0
+    },
+    caloriesDensity: {
+      food: food.entries > 0 ? (food.calories || 0) / food.entries : 0,
+      recipe: recipe.entries > 0 ? (recipe.calories || 0) / recipe.entries : 0
     }
+  };
+}
 
-    if (foodPercentage > 70) {
-      recommendations.push({
-        type: 'suggestion',
-        message: 'Try cooking more complete recipes to improve meal satisfaction and nutritional balance.',
-        priority: 'medium',
-        action: 'increase_recipe_usage'
-      });
-    }
+function generateFoodVsRecipeRecommendations(itemTypeBreakdown) {
+  const recommendations = [];
+  
+  if (!itemTypeBreakdown) return recommendations;
+  
+  const food = itemTypeBreakdown.food || {};
+  const recipe = itemTypeBreakdown.recipe || {};
 
-    return recommendations;
+  const totalCalories = (food.calories || 0) + (recipe.calories || 0);
+  if (totalCalories === 0) return recommendations;
+
+  const foodPercentage = ((food.calories || 0) / totalCalories) * 100;
+
+  if (foodPercentage < 30) {
+    recommendations.push({
+      type: 'suggestion',
+      message: 'Consider incorporating more fresh, whole foods into your diet for better nutritional variety.',
+      priority: 'medium',
+      action: 'increase_food_intake'
+    });
   }
+
+  if (foodPercentage > 70) {
+    recommendations.push({
+      type: 'suggestion',
+      message: 'Try cooking more complete recipes to improve meal satisfaction and nutritional balance.',
+      priority: 'medium',
+      action: 'increase_recipe_usage'
+    });
+  }
+
+  return recommendations;
 }
 
 module.exports = new ConsumptionController();

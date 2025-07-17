@@ -3529,6 +3529,16 @@
             "type": "string"
           },
           {
+            "name": "entryMethod",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "sortBy",
             "in": "query",
             "type": "string"
@@ -3540,16 +3550,6 @@
           },
           {
             "name": "includeDeleted",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "entryMethod",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "tags",
             "in": "query",
             "type": "string"
           },
@@ -4153,22 +4153,42 @@
             "type": "string"
           },
           {
-            "name": "search",
+            "name": "mealType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortBy",
+            "name": "itemType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortOrder",
+            "name": "entryMethod",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "includeDeleted",
+            "name": "tags",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "minCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "maxCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           },
@@ -4253,22 +4273,42 @@
             "type": "string"
           },
           {
-            "name": "search",
+            "name": "mealType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortBy",
+            "name": "itemType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortOrder",
+            "name": "entryMethod",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "includeDeleted",
+            "name": "tags",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "minCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "maxCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           },
@@ -4825,22 +4865,22 @@
             "type": "string"
           },
           {
-            "name": "includeComparison",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "includeInsights",
-            "in": "query",
-            "type": "string"
-          },
-          {
             "name": "weekOffset",
             "in": "query",
             "type": "string"
           },
           {
             "name": "monthOffset",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
             "in": "query",
             "type": "string"
           },
@@ -4911,17 +4951,12 @@
             "type": "string"
           },
           {
-            "name": "includeComparison",
+            "name": "includeBreakdown",
             "in": "query",
             "type": "string"
           },
           {
             "name": "includeGoals",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "includeInsights",
             "in": "query",
             "type": "string"
           },
@@ -5295,11 +5330,6 @@
             "name": "basedOn",
             "in": "query",
             "type": "string"
-          },
-          {
-            "name": "timeOfDay",
-            "in": "query",
-            "type": "string"
           }
         ],
         "responses": {
@@ -5589,12 +5619,12 @@
             "type": "string"
           },
           {
-            "name": "limit",
+            "name": "period",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "period",
+            "name": "limit",
             "in": "query",
             "type": "string"
           },
@@ -5632,12 +5662,12 @@
             "type": "string"
           },
           {
-            "name": "limit",
+            "name": "period",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "period",
+            "name": "limit",
             "in": "query",
             "type": "string"
           },
@@ -5846,7 +5876,27 @@
             "type": "string"
           },
           {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -5879,7 +5929,27 @@
             "type": "string"
           },
           {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -5912,7 +5982,27 @@
             "type": "string"
           },
           {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -5945,16 +6035,6 @@
             "type": "string"
           },
           {
-            "name": "dateFrom",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "dateTo",
-            "in": "query",
-            "type": "string"
-          },
-          {
             "name": "includeNutrition",
             "in": "query",
             "type": "string"
@@ -5970,7 +6050,12 @@
             "type": "string"
           },
           {
-            "name": "limit",
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -15177,6 +15262,16 @@
             "type": "string"
           },
           {
+            "name": "entryMethod",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "tags",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "sortBy",
             "in": "query",
             "type": "string"
@@ -15188,16 +15283,6 @@
           },
           {
             "name": "includeDeleted",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "entryMethod",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "tags",
             "in": "query",
             "type": "string"
           },
@@ -15771,22 +15856,42 @@
             "type": "string"
           },
           {
-            "name": "search",
+            "name": "mealType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortBy",
+            "name": "itemType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortOrder",
+            "name": "entryMethod",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "includeDeleted",
+            "name": "tags",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "minCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "maxCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           },
@@ -15865,22 +15970,42 @@
             "type": "string"
           },
           {
-            "name": "search",
+            "name": "mealType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortBy",
+            "name": "itemType",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "sortOrder",
+            "name": "entryMethod",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "includeDeleted",
+            "name": "tags",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "minCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "maxCalories",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           },
@@ -16281,22 +16406,22 @@
             "type": "string"
           },
           {
-            "name": "includeComparison",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "includeInsights",
-            "in": "query",
-            "type": "string"
-          },
-          {
             "name": "weekOffset",
             "in": "query",
             "type": "string"
           },
           {
             "name": "monthOffset",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
             "in": "query",
             "type": "string"
           },
@@ -16361,17 +16486,12 @@
             "type": "string"
           },
           {
-            "name": "includeComparison",
+            "name": "includeBreakdown",
             "in": "query",
             "type": "string"
           },
           {
             "name": "includeGoals",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "includeInsights",
             "in": "query",
             "type": "string"
           },
@@ -16715,11 +16835,6 @@
             "name": "basedOn",
             "in": "query",
             "type": "string"
-          },
-          {
-            "name": "timeOfDay",
-            "in": "query",
-            "type": "string"
           }
         ],
         "responses": {
@@ -16861,12 +16976,12 @@
             "type": "string"
           },
           {
-            "name": "limit",
+            "name": "period",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "period",
+            "name": "limit",
             "in": "query",
             "type": "string"
           },
@@ -16898,12 +17013,12 @@
             "type": "string"
           },
           {
-            "name": "limit",
+            "name": "period",
             "in": "query",
             "type": "string"
           },
           {
-            "name": "period",
+            "name": "limit",
             "in": "query",
             "type": "string"
           },
@@ -17076,7 +17191,27 @@
             "type": "string"
           },
           {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -17103,7 +17238,27 @@
             "type": "string"
           },
           {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -17130,7 +17285,27 @@
             "type": "string"
           },
           {
+            "name": "reportType",
+            "in": "query",
+            "type": "string"
+          },
+          {
             "name": "includeComparison",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "includeInsights",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
@@ -17157,16 +17332,6 @@
             "type": "string"
           },
           {
-            "name": "dateFrom",
-            "in": "query",
-            "type": "string"
-          },
-          {
-            "name": "dateTo",
-            "in": "query",
-            "type": "string"
-          },
-          {
             "name": "includeNutrition",
             "in": "query",
             "type": "string"
@@ -17182,7 +17347,12 @@
             "type": "string"
           },
           {
-            "name": "limit",
+            "name": "dateFrom",
+            "in": "query",
+            "type": "string"
+          },
+          {
+            "name": "dateTo",
             "in": "query",
             "type": "string"
           }
