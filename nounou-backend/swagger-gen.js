@@ -5,8 +5,8 @@ const swaggerAutogen = require('swagger-autogen')();
 const doc = {
   info: {
     title: 'Nounou Nutrition API',
-    description: 'A comprehensive nutrition tracking API with MongoDB backend supporting unified food and recipe consumption tracking.',
-    version: '2.0.0',
+    description: 'A comprehensive nutrition tracking API with MongoDB backend supporting unified food and recipe consumption tracking, plus AI-powered image analysis for automatic nutrition extraction.',
+    version: '2.1.0',
     contact: {
       name: 'API Support',
       email: 'support@nounou-nutrition.com'
@@ -19,7 +19,7 @@ const doc = {
   host: 'localhost:3000',
   basePath: '/',
   schemes: ['http', 'https'],
-  consumes: ['application/json'],
+  consumes: ['application/json', 'multipart/form-data'],
   produces: ['application/json'],
   tags: [
     {
@@ -49,6 +49,14 @@ const doc = {
     {
       name: 'Analytics',
       description: 'Advanced nutrition analytics and reporting'
+    },
+    {
+      name: 'AI Image Analysis',
+      description: 'AI-powered food image analysis and automatic nutrition extraction'
+    },
+    {
+      name: 'AI Consumption',
+      description: 'AI-assisted consumption entry creation from images'
     },
     {
       name: 'Admin',
@@ -413,6 +421,385 @@ const doc = {
       ]
     },
 
+    // ========== AI IMAGE ANALYSIS SCHEMAS ==========
+    AIAnalysisRequest: {
+      type: "object",
+      required: ["foodImage"],
+      properties: {
+        foodImage: {
+          type: "string",
+          format: "binary",
+          description: "Food image file (JPEG, PNG, WebP supported, max 10MB)"
+        },
+        confidence_threshold: {
+          type: "integer",
+          minimum: 1,
+          maximum: 10,
+          default: 5,
+          description: "Minimum confidence level required for analysis (1-10)"
+        }
+      }
+    },
+    AIAnalysisResult: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { "$ref": "#/definitions/FoodAnalysisData" },
+        confidence: { type: "integer", minimum: 1, maximum: 10, example: 7 },
+        message: { type: "string", example: "Image analyzed successfully" }
+      }
+    },
+    FoodAnalysisData: {
+      type: "object",
+      properties: {
+        dishName: { type: "string", example: "Chicken Caesar Salad" },
+        category: { 
+          type: "string", 
+          enum: ["breakfast", "lunch", "dinner", "snack", "appetizer", "main course", "dessert", "other"], 
+          example: "main course" 
+        },
+        cuisineType: { type: "string", example: "American" },
+        description: { type: "string", example: "Crisp romaine lettuce, grilled chicken, croutons, Parmesan cheese, Caesar dressing" },
+        servingSize: { type: "string", example: "350 grams" },
+        estimatedWeight: { type: "number", example: 350 },
+        nutritionPerServing: { "$ref": "#/definitions/NutritionData" },
+        mainIngredients: {
+          type: "array",
+          items: { type: "string" },
+          example: ["Romaine lettuce", "grilled chicken", "croutons", "Parmesan cheese", "Caesar dressing"]
+        },
+        allergens: {
+          type: "array",
+          items: { type: "string" },
+          example: ["Dairy", "Gluten"]
+        },
+        confidence: { type: "integer", minimum: 1, maximum: 10, example: 7 },
+        healthNotes: { type: "string", example: "High protein content, moderate calories" },
+        analysisMethod: { type: "string", example: "ai_image_analysis" },
+        calculationSource: { type: "string", example: "gemini_ai_estimation" }
+      }
+    },
+    NutritionData: {
+      type: "object",
+      properties: {
+        calories: { type: "number", example: 450 },
+        protein: { type: "number", example: 35 },
+        carbs: { type: "number", example: 25 },
+        fat: { type: "number", example: 20 },
+        fiber: { type: "number", example: 5 },
+        sodium: { type: "number", example: 700 }
+      }
+    },
+    AICreateEntryRequest: {
+      type: "object",
+      required: ["foodImage", "userId"],
+      properties: {
+        foodImage: {
+          type: "string",
+          format: "binary",
+          description: "Food image file to analyze"
+        },
+        userId: {
+          type: "string",
+          example: "64f7d1b2c8e5f1234567890a",
+          description: "User ID for whom to create the entry"
+        },
+        mealType: {
+          type: "string",
+          enum: ["breakfast", "lunch", "dinner", "snack", "other"],
+          default: "other",
+          description: "Type of meal"
+        },
+        consumedAt: {
+          type: "string",
+          format: "date-time",
+          description: "When the food was consumed (defaults to now)"
+        },
+        confidence_threshold: {
+          type: "integer",
+          minimum: 1,
+          maximum: 10,
+          default: 5,
+          description: "Minimum confidence level required"
+        },
+        create_food_if_new: {
+          type: "string",
+          enum: ["true", "false"],
+          default: "true",
+          description: "Whether to create a new food item if not found in database"
+        }
+      }
+    },
+    AICreateEntryResponse: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            consumptionEntry: { "$ref": "#/definitions/ConsumptionEntry" },
+            food: { "$ref": "#/definitions/Food" },
+            aiAnalysis: { "$ref": "#/definitions/FoodAnalysisData" },
+            confidence: { type: "integer", example: 7 },
+            nutritionSummary: { "$ref": "#/definitions/NutritionData" }
+          }
+        },
+        message: { type: "string", example: "Consumption entry created from image analysis" }
+      }
+    },
+    MultipleFoodsAnalysis: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            itemCount: { type: "integer", example: 3 },
+            detectedFoods: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  name: { type: "string", example: "Caesar Salad" },
+                  portionSize: { type: "string", example: "200g" },
+                  calories: { type: "number", example: 280 },
+                  protein: { type: "number", example: 20 },
+                  carbs: { type: "number", example: 15 },
+                  fat: { type: "number", example: 18 },
+                  confidence: { type: "integer", example: 8 }
+                }
+              }
+            },
+            rawAnalysis: { type: "string" }
+          }
+        },
+        message: { type: "string", example: "Detected 3 food item(s) in image" }
+      }
+    },
+    AIMealFromImageRequest: {
+      type: "object",
+      required: ["foodImage", "userId"],
+      properties: {
+        foodImage: {
+          type: "string",
+          format: "binary",
+          description: "Food image containing multiple food items"
+        },
+        userId: {
+          type: "string",
+          example: "64f7d1b2c8e5f1234567890a",
+          description: "User ID"
+        },
+        mealType: {
+          type: "string",
+          enum: ["breakfast", "lunch", "dinner", "snack", "other"],
+          default: "other"
+        },
+        consumedAt: {
+          type: "string",
+          format: "date-time"
+        },
+        mealName: {
+          type: "string",
+          example: "AI Analyzed Meal",
+          description: "Name for the meal containing multiple items"
+        }
+      }
+    },
+    AIMealFromImageResponse: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: {
+          type: "object",
+          properties: {
+            mealName: { type: "string", example: "Lunch Combo" },
+            totalItems: { type: "integer", example: 3 },
+            successfulEntries: { type: "integer", example: 3 },
+            failedEntries: { type: "integer", example: 0 },
+            consumptionEntries: {
+              type: "array",
+              items: { "$ref": "#/definitions/ConsumptionEntry" }
+            },
+            createdFoods: {
+              type: "array", 
+              items: { "$ref": "#/definitions/Food" }
+            },
+            detectedFoods: {
+              type: "array",
+              items: { "$ref": "#/definitions/FoodAnalysisData" }
+            },
+            errors: { type: "array", items: { type: "object" } }
+          }
+        },
+        message: { type: "string", example: "Created meal with 3 items from image analysis" }
+      }
+    },
+    ImageTipsResponse: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        confidence: { type: "integer", example: 6 },
+        tips: {
+          type: "array",
+          items: { type: "string" },
+          example: [
+            "Good image! For better accuracy, try a closer shot",
+            "Ensure the entire dish is visible in the frame",
+            "Place food on a plain background when possible"
+          ]
+        },
+        canAnalyze: { type: "boolean", example: true },
+        suggestion: { type: "string", example: "Good analysis - you may proceed or take a clearer image" }
+      }
+    },
+    AIServiceStatus: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        status: {
+          type: "object",
+          properties: {
+            aiImageAnalysis: { type: "boolean", example: true },
+            consumptionService: { type: "boolean", example: true },
+            foodService: { type: "boolean", example: true },
+            geminiConfigured: { type: "boolean", example: true },
+            services: {
+              type: "object",
+              properties: {
+                consumption: {
+                  type: "object",
+                  properties: {
+                    available: { type: "boolean", example: true },
+                    methods: {
+                      type: "object",
+                      properties: {
+                        createConsumptionEntry: { type: "boolean", example: true },
+                        getUserConsumptions: { type: "boolean", example: true },
+                        addQuickMeal: { type: "boolean", example: true }
+                      }
+                    }
+                  }
+                },
+                food: {
+                  type: "object",
+                  properties: {
+                    available: { type: "boolean", example: true },
+                    methods: {
+                      type: "object",
+                      properties: {
+                        createCompleteFood: { type: "boolean", example: true },
+                        searchFoods: { type: "boolean", example: true },
+                        getFoodById: { type: "boolean", example: true }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        message: { type: "string", example: "Service status retrieved" },
+        integration: { type: "string", example: "Production-ready with actual service methods" }
+      }
+    },
+    AIHealthStatus: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        service: { type: "string", example: "AI Image Analysis" },
+        status: { type: "string", example: "operational" },
+        geminiConfigured: { type: "boolean", example: true },
+        supportedFormats: {
+          type: "array",
+          items: { type: "string" },
+          example: ["JPEG", "PNG", "WebP"]
+        },
+        maxFileSize: { type: "string", example: "10MB" },
+        features: {
+          type: "array",
+          items: { type: "string" },
+          example: [
+            "Single food analysis",
+            "Multiple food detection", 
+            "Automatic entry creation",
+            "Meal creation from images",
+            "Image quality tips"
+          ]
+        }
+      }
+    },
+    AIStatsResponse: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        stats: {
+          type: "object",
+          properties: {
+            serviceUptime: { type: "number", example: 86400 },
+            memoryUsage: {
+              type: "object",
+              properties: {
+                rss: { type: "number" },
+                heapTotal: { type: "number" },
+                heapUsed: { type: "number" },
+                external: { type: "number" }
+              }
+            },
+            aiModel: { type: "string", example: "gemini-1.5-flash" },
+            analysisEndpoints: { type: "integer", example: 5 },
+            lastUpdated: { type: "string", format: "date-time" }
+          }
+        }
+      }
+    },
+
+    // ========== ERROR SCHEMAS ==========
+    AIError: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        error: { type: "string", example: "Image analysis failed" },
+        message: { type: "string", example: "Could not analyze the uploaded image" },
+        code: { type: "string", example: "AI_ANALYSIS_ERROR" },
+        details: {
+          type: "object",
+          properties: {
+            confidence: { type: "integer" },
+            suggestion: { type: "string" }
+          }
+        }
+      }
+    },
+    FileUploadError: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        error: { type: "string", example: "File too large" },
+        message: { type: "string", example: "Image file must be smaller than 10MB" },
+        code: { type: "string", example: "FILE_SIZE_ERROR" }
+      }
+    },
+    AIConfigError: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: false },
+        error: { type: "string", example: "AI service configuration error" },
+        message: { type: "string", example: "Image analysis service is not properly configured" },
+        code: { type: "string", example: "AI_CONFIG_ERROR" }
+      }
+    },
+    LowConfidenceResponse: {
+      type: "object",
+      properties: {
+        success: { type: "boolean", example: true },
+        data: { "$ref": "#/definitions/FoodAnalysisData" },
+        warning: { type: "string", example: "Low confidence analysis" },
+        confidence: { type: "integer", example: 3 },
+        suggestion: { type: "string", example: "Consider taking a clearer image or manual entry" }
+      }
+    },
+
     // ========== COMMON SCHEMAS ==========
     Error: {
       success: false,
@@ -441,18 +828,26 @@ const doc = {
       status: "healthy",
       timestamp: "2024-01-15T10:30:00.000Z",
       service: "nounou-nutrition-api",
-      version: "2.0.0",
+      version: "2.1.0",
       uptime: 3600,
       environment: "development",
       database: {
         status: "connected",
         responseTime: "15ms"
       },
+      aiService: {
+        geminiConfigured: true,
+        uploadsDirectory: true,
+        tempDirectory: true
+      },
       features: {
         unifiedItemSupport: true,
         foodIntegration: true,
         recipeIntegration: true,
-        advancedAnalytics: true
+        advancedAnalytics: true,
+        aiImageAnalysis: true,
+        aiNutritionExtraction: true,
+        aiMultiFoodDetection: true
       }
     },
 
@@ -501,7 +896,9 @@ const endpointsFiles = [
   './src/routes/userRoutes.js',
   './src/routes/foodRoutes.js',
   './src/routes/consumptionRoutes.js',
-  './src/routes/recipeRoutes.js'
+  './src/routes/recipeRoutes.js',
+  // 🤖 NEW: Add AI routes
+  './src/routes/aiConsumptionRoutes.js'
 ];
 
 // Generate swagger documentation
@@ -510,4 +907,5 @@ swaggerAutogen(outputFile, endpointsFiles, doc).then(() => {
   console.log('📄 Generated file:', outputFile);
   console.log('🚀 Start your server to view docs at: http://localhost:3000/api-docs');
   console.log('📊 JSON spec available at: http://localhost:3000/api-docs.json');
+  console.log('🤖 AI endpoints included in documentation');
 });

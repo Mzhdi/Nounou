@@ -2,8 +2,8 @@
   "swagger": "2.0",
   "info": {
     "title": "Nounou Nutrition API",
-    "description": "A comprehensive nutrition tracking API with MongoDB backend supporting unified food and recipe consumption tracking.",
-    "version": "2.0.0",
+    "description": "A comprehensive nutrition tracking API with MongoDB backend supporting unified food and recipe consumption tracking, plus AI-powered image analysis for automatic nutrition extraction.",
+    "version": "2.1.0",
     "contact": {
       "name": "API Support",
       "email": "support@nounou-nutrition.com"
@@ -45,6 +45,14 @@
       "description": "Advanced nutrition analytics and reporting"
     },
     {
+      "name": "AI Image Analysis",
+      "description": "AI-powered food image analysis and automatic nutrition extraction"
+    },
+    {
+      "name": "AI Consumption",
+      "description": "AI-assisted consumption entry creation from images"
+    },
+    {
       "name": "Admin",
       "description": "Administrative operations and system management"
     }
@@ -68,7 +76,8 @@
     }
   },
   "consumes": [
-    "application/json"
+    "application/json",
+    "multipart/form-data"
   ],
   "produces": [
     "application/json"
@@ -97,22 +106,15 @@
     "/health": {
       "get": {
         "tags": [
-          "Health"
+          "AI Image Analysis"
         ],
-        "summary": "Consumption service health check",
-        "description": "",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "type": "string"
-          }
-        ],
+        "summary": "AI service health check",
+        "description": "Check the health and availability of the AI image analysis service",
         "responses": {
           "200": {
-            "description": "Service health status",
+            "description": "AI service is operational",
             "schema": {
-              "$ref": "#/definitions/HealthCheck",
+              "$ref": "#/definitions/AIHealthStatus",
               "type": "object",
               "properties": {
                 "type": {
@@ -223,7 +225,7 @@
             }
           },
           "503": {
-            "description": "Server is unhealthy",
+            "description": "AI service is unavailable",
             "schema": {
               "type": "object",
               "properties": {
@@ -256,7 +258,8 @@
               },
               "xml": {
                 "name": "main"
-              }
+              },
+              "$ref": "#/definitions/AIConfigError"
             }
           }
         }
@@ -3411,6 +3414,707 @@
             "bearerAuth": []
           }
         ]
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/analyze-image": {
+      "post": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Analyze food image with AI",
+        "description": "Upload a food image and get AI-powered nutrition analysis without creating database entries",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image file (JPEG, PNG, WebP, max 10MB)"
+          },
+          {
+            "name": "confidence_threshold",
+            "in": "formData",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Minimum confidence level required for analysis (1-10)"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "confidence_threshold": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image analyzed successfully",
+            "schema": {
+              "$ref": "#/definitions/AIAnalysisResult"
+            }
+          },
+          "400": {
+            "description": "Invalid image or parameters",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "422": {
+            "description": "Image analysis failed",
+            "schema": {
+              "$ref": "#/definitions/AIError"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "AI service not configured",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/create-from-image": {
+      "post": {
+        "tags": [
+          "AI Consumption"
+        ],
+        "summary": "Create consumption entry from food image",
+        "description": "Upload a food image, analyze it with AI, and automatically create a consumption entry with food creation if needed",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image file to analyze"
+          },
+          {
+            "name": "userId",
+            "in": "formData",
+            "type": "string",
+            "required": true,
+            "description": "User ID for whom to create the entry",
+            "example": "64f7d1b2c8e5f1234567890a"
+          },
+          {
+            "name": "mealType",
+            "in": "formData",
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack",
+              "other"
+            ],
+            "default": "other",
+            "description": "Type of meal"
+          },
+          {
+            "name": "consumedAt",
+            "in": "formData",
+            "type": "string",
+            "format": "date-time",
+            "description": "When the food was consumed (defaults to now)"
+          },
+          {
+            "name": "confidence_threshold",
+            "in": "formData",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Minimum confidence level required"
+          },
+          {
+            "name": "create_food_if_new",
+            "in": "formData",
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "default": "true",
+            "description": "Whether to create a new food item if not found in database"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "example": "any"
+                },
+                "mealType": {
+                  "example": "any"
+                },
+                "consumedAt": {
+                  "example": "any"
+                },
+                "confidence_threshold": {
+                  "example": "any"
+                },
+                "create_food_if_new": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analysis completed but requires manual entry",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "requiresManualEntry": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "analysisData": {
+                      "$ref": "#/definitions/FoodAnalysisData"
+                    },
+                    "confidence": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 4
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Image analyzed successfully. Please create entry manually."
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "201": {
+            "description": "Consumption entry created successfully",
+            "schema": {
+              "$ref": "#/definitions/AICreateEntryResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "422": {
+            "description": "Could not create food or consumption entry",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": false
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Could not create food entry from analysis"
+                        }
+                      }
+                    },
+                    "analysisData": {
+                      "$ref": "#/definitions/FoodAnalysisData"
+                    },
+                    "suggestion": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Please create food manually and try again"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/analyze-multiple": {
+      "post": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Detect multiple foods in one image",
+        "description": "Upload an image containing multiple food items and get AI analysis for each detected item",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image containing multiple food items"
+          },
+          {
+            "name": "confidence_threshold",
+            "in": "formData",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Minimum confidence level for each detected item"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Multiple foods detected and analyzed",
+            "schema": {
+              "$ref": "#/definitions/MultipleFoodsAnalysis"
+            }
+          },
+          "400": {
+            "description": "Invalid image file",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "422": {
+            "description": "Could not detect multiple foods",
+            "schema": {
+              "$ref": "#/definitions/AIError"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "AI service not available",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/create-meal-from-image": {
+      "post": {
+        "tags": [
+          "AI Consumption"
+        ],
+        "summary": "Create complete meal from multi-food image",
+        "description": "Upload an image with multiple foods, detect each item with AI, and create individual consumption entries for each food detected",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image containing multiple food items"
+          },
+          {
+            "name": "userId",
+            "in": "formData",
+            "type": "string",
+            "required": true,
+            "description": "User ID",
+            "example": "64f7d1b2c8e5f1234567890a"
+          },
+          {
+            "name": "mealType",
+            "in": "formData",
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack",
+              "other"
+            ],
+            "default": "other",
+            "description": "Type of meal for all detected items"
+          },
+          {
+            "name": "consumedAt",
+            "in": "formData",
+            "type": "string",
+            "format": "date-time",
+            "description": "When the meal was consumed (defaults to now)"
+          },
+          {
+            "name": "mealName",
+            "in": "formData",
+            "type": "string",
+            "default": "AI Analyzed Meal",
+            "description": "Name for the meal containing multiple items"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "example": "any"
+                },
+                "mealType": {
+                  "example": "any"
+                },
+                "consumedAt": {
+                  "example": "any"
+                },
+                "mealName": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Meal created with multiple items",
+            "schema": {
+              "$ref": "#/definitions/AIMealFromImageResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Could not detect foods in image",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": false
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Could not detect foods in image"
+                        }
+                      }
+                    },
+                    "details": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to create meal from image",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/image-tips": {
+      "post": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Get image quality improvement tips",
+        "description": "Upload a food image and receive AI-powered suggestions for improving image quality and analysis accuracy",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image to analyze for quality tips"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image tips and quality analysis",
+            "schema": {
+              "$ref": "#/definitions/ImageTipsResponse"
+            }
+          },
+          "400": {
+            "description": "No image provided or invalid format",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "500": {
+            "description": "Failed to analyze image for tips",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/health": {
+      "get": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "AI service health check",
+        "description": "Check the health and availability of the AI image analysis service",
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI service is operational",
+            "schema": {
+              "$ref": "#/definitions/AIHealthStatus"
+            }
+          },
+          "503": {
+            "description": "AI service is unavailable",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/service-status": {
+      "get": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Get detailed service integration status",
+        "description": "Get comprehensive status of AI service integration with backend services including database connections and service method availability",
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Service integration status",
+            "schema": {
+              "$ref": "#/definitions/AIServiceStatus"
+            }
+          },
+          "500": {
+            "description": "Failed to get service status",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/api/${API_VERSION}/consumption/ai/stats": {
+      "get": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Get AI service statistics",
+        "description": "Get operational statistics and performance metrics for the AI image analysis service",
+        "parameters": [
+          {
+            "name": "API_VERSION",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "AI service statistics",
+            "schema": {
+              "$ref": "#/definitions/AIStatsResponse"
+            }
+          },
+          "500": {
+            "description": "Failed to get statistics",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
       }
     },
     "/api/${API_VERSION}/consumption/entries": {
@@ -19411,6 +20115,630 @@
           }
         ]
       }
+    },
+    "/analyze-image": {
+      "post": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Analyze food image with AI",
+        "description": "Upload a food image and get AI-powered nutrition analysis without creating database entries",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image file (JPEG, PNG, WebP, max 10MB)"
+          },
+          {
+            "name": "confidence_threshold",
+            "in": "formData",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Minimum confidence level required for analysis (1-10)"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "confidence_threshold": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image analyzed successfully",
+            "schema": {
+              "$ref": "#/definitions/AIAnalysisResult"
+            }
+          },
+          "400": {
+            "description": "Invalid image or parameters",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "422": {
+            "description": "Image analysis failed",
+            "schema": {
+              "$ref": "#/definitions/AIError"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "AI service not configured",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/create-from-image": {
+      "post": {
+        "tags": [
+          "AI Consumption"
+        ],
+        "summary": "Create consumption entry from food image",
+        "description": "Upload a food image, analyze it with AI, and automatically create a consumption entry with food creation if needed",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image file to analyze"
+          },
+          {
+            "name": "userId",
+            "in": "formData",
+            "type": "string",
+            "required": true,
+            "description": "User ID for whom to create the entry",
+            "example": "64f7d1b2c8e5f1234567890a"
+          },
+          {
+            "name": "mealType",
+            "in": "formData",
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack",
+              "other"
+            ],
+            "default": "other",
+            "description": "Type of meal"
+          },
+          {
+            "name": "consumedAt",
+            "in": "formData",
+            "type": "string",
+            "format": "date-time",
+            "description": "When the food was consumed (defaults to now)"
+          },
+          {
+            "name": "confidence_threshold",
+            "in": "formData",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Minimum confidence level required"
+          },
+          {
+            "name": "create_food_if_new",
+            "in": "formData",
+            "type": "string",
+            "enum": [
+              "true",
+              "false"
+            ],
+            "default": "true",
+            "description": "Whether to create a new food item if not found in database"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "example": "any"
+                },
+                "mealType": {
+                  "example": "any"
+                },
+                "consumedAt": {
+                  "example": "any"
+                },
+                "confidence_threshold": {
+                  "example": "any"
+                },
+                "create_food_if_new": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Analysis completed but requires manual entry",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "requiresManualEntry": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "analysisData": {
+                      "$ref": "#/definitions/FoodAnalysisData"
+                    },
+                    "confidence": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 4
+                        }
+                      }
+                    },
+                    "message": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Image analyzed successfully. Please create entry manually."
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "201": {
+            "description": "Consumption entry created successfully",
+            "schema": {
+              "$ref": "#/definitions/AICreateEntryResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request data",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "422": {
+            "description": "Could not create food or consumption entry",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": false
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Could not create food entry from analysis"
+                        }
+                      }
+                    },
+                    "analysisData": {
+                      "$ref": "#/definitions/FoodAnalysisData"
+                    },
+                    "suggestion": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Please create food manually and try again"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/analyze-multiple": {
+      "post": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Detect multiple foods in one image",
+        "description": "Upload an image containing multiple food items and get AI analysis for each detected item",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image containing multiple food items"
+          },
+          {
+            "name": "confidence_threshold",
+            "in": "formData",
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "default": 5,
+            "description": "Minimum confidence level for each detected item"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Multiple foods detected and analyzed",
+            "schema": {
+              "$ref": "#/definitions/MultipleFoodsAnalysis"
+            }
+          },
+          "400": {
+            "description": "Invalid image file",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "422": {
+            "description": "Could not detect multiple foods",
+            "schema": {
+              "$ref": "#/definitions/AIError"
+            }
+          },
+          "500": {
+            "description": "Internal Server Error"
+          },
+          "503": {
+            "description": "AI service not available",
+            "schema": {
+              "$ref": "#/definitions/AIConfigError"
+            }
+          }
+        }
+      }
+    },
+    "/create-meal-from-image": {
+      "post": {
+        "tags": [
+          "AI Consumption"
+        ],
+        "summary": "Create complete meal from multi-food image",
+        "description": "Upload an image with multiple foods, detect each item with AI, and create individual consumption entries for each food detected",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image containing multiple food items"
+          },
+          {
+            "name": "userId",
+            "in": "formData",
+            "type": "string",
+            "required": true,
+            "description": "User ID",
+            "example": "64f7d1b2c8e5f1234567890a"
+          },
+          {
+            "name": "mealType",
+            "in": "formData",
+            "type": "string",
+            "enum": [
+              "breakfast",
+              "lunch",
+              "dinner",
+              "snack",
+              "other"
+            ],
+            "default": "other",
+            "description": "Type of meal for all detected items"
+          },
+          {
+            "name": "consumedAt",
+            "in": "formData",
+            "type": "string",
+            "format": "date-time",
+            "description": "When the meal was consumed (defaults to now)"
+          },
+          {
+            "name": "mealName",
+            "in": "formData",
+            "type": "string",
+            "default": "AI Analyzed Meal",
+            "description": "Name for the meal containing multiple items"
+          },
+          {
+            "name": "body",
+            "in": "body",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "example": "any"
+                },
+                "mealType": {
+                  "example": "any"
+                },
+                "consumedAt": {
+                  "example": "any"
+                },
+                "mealName": {
+                  "example": "any"
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Meal created with multiple items",
+            "schema": {
+              "$ref": "#/definitions/AIMealFromImageResponse"
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "422": {
+            "description": "Could not detect foods in image",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": false
+                        }
+                      }
+                    },
+                    "error": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Could not detect foods in image"
+                        }
+                      }
+                    },
+                    "details": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              },
+              "xml": {
+                "name": "main"
+              }
+            }
+          },
+          "500": {
+            "description": "Failed to create meal from image",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/image-tips": {
+      "post": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Get image quality improvement tips",
+        "description": "Upload a food image and receive AI-powered suggestions for improving image quality and analysis accuracy",
+        "consumes": [
+          "multipart/form-data"
+        ],
+        "parameters": [
+          {
+            "name": "foodImage",
+            "in": "formData",
+            "type": "file",
+            "required": true,
+            "description": "Food image to analyze for quality tips"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Image tips and quality analysis",
+            "schema": {
+              "$ref": "#/definitions/ImageTipsResponse"
+            }
+          },
+          "400": {
+            "description": "No image provided or invalid format",
+            "schema": {
+              "$ref": "#/definitions/FileUploadError"
+            }
+          },
+          "500": {
+            "description": "Failed to analyze image for tips",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/service-status": {
+      "get": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Get detailed service integration status",
+        "description": "Get comprehensive status of AI service integration with backend services including database connections and service method availability",
+        "responses": {
+          "200": {
+            "description": "Service integration status",
+            "schema": {
+              "$ref": "#/definitions/AIServiceStatus"
+            }
+          },
+          "500": {
+            "description": "Failed to get service status",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
+    },
+    "/stats": {
+      "get": {
+        "tags": [
+          "AI Image Analysis"
+        ],
+        "summary": "Get AI service statistics",
+        "description": "Get operational statistics and performance metrics for the AI image analysis service",
+        "responses": {
+          "200": {
+            "description": "AI service statistics",
+            "schema": {
+              "$ref": "#/definitions/AIStatsResponse"
+            }
+          },
+          "500": {
+            "description": "Failed to get statistics",
+            "schema": {
+              "$ref": "#/definitions/Error"
+            }
+          }
+        }
+      }
     }
   },
   "definitions": {
@@ -20574,6 +21902,2126 @@
         }
       }
     },
+    "AIAnalysisRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "required": {
+          "type": "array",
+          "example": [
+            "foodImage"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "foodImage": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "example": "binary"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Food image file (JPEG, PNG, WebP supported, max 10MB)"
+                }
+              }
+            },
+            "confidence_threshold": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "integer"
+                },
+                "minimum": {
+                  "type": "number",
+                  "example": 1
+                },
+                "maximum": {
+                  "type": "number",
+                  "example": 10
+                },
+                "default": {
+                  "type": "number",
+                  "example": 5
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Minimum confidence level required for analysis (1-10)"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIAnalysisResult": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "data": {
+              "$ref": "#/definitions/FoodAnalysisData"
+            },
+            "confidence": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "integer"
+                },
+                "minimum": {
+                  "type": "number",
+                  "example": 1
+                },
+                "maximum": {
+                  "type": "number",
+                  "example": 10
+                },
+                "example": {
+                  "type": "number",
+                  "example": 7
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Image analyzed successfully"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "FoodAnalysisData": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "dishName": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Chicken Caesar Salad"
+                }
+              }
+            },
+            "category": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "enum": {
+                  "type": "array",
+                  "example": [
+                    "breakfast",
+                    "lunch",
+                    "dinner",
+                    "snack",
+                    "appetizer",
+                    "main course",
+                    "dessert",
+                    "other"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "example": {
+                  "type": "string",
+                  "example": "main course"
+                }
+              }
+            },
+            "cuisineType": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "American"
+                }
+              }
+            },
+            "description": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Crisp romaine lettuce, grilled chicken, croutons, Parmesan cheese, Caesar dressing"
+                }
+              }
+            },
+            "servingSize": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "350 grams"
+                }
+              }
+            },
+            "estimatedWeight": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 350
+                }
+              }
+            },
+            "nutritionPerServing": {
+              "$ref": "#/definitions/NutritionData"
+            },
+            "mainIngredients": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "array"
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "array",
+                  "example": [
+                    "Romaine lettuce",
+                    "grilled chicken",
+                    "croutons",
+                    "Parmesan cheese",
+                    "Caesar dressing"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "allergens": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "array"
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "array",
+                  "example": [
+                    "Dairy",
+                    "Gluten"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "confidence": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "integer"
+                },
+                "minimum": {
+                  "type": "number",
+                  "example": 1
+                },
+                "maximum": {
+                  "type": "number",
+                  "example": 10
+                },
+                "example": {
+                  "type": "number",
+                  "example": 7
+                }
+              }
+            },
+            "healthNotes": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "High protein content, moderate calories"
+                }
+              }
+            },
+            "analysisMethod": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "ai_image_analysis"
+                }
+              }
+            },
+            "calculationSource": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "gemini_ai_estimation"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "NutritionData": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "calories": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 450
+                }
+              }
+            },
+            "protein": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 35
+                }
+              }
+            },
+            "carbs": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 25
+                }
+              }
+            },
+            "fat": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 20
+                }
+              }
+            },
+            "fiber": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 5
+                }
+              }
+            },
+            "sodium": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "number"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 700
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AICreateEntryRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "required": {
+          "type": "array",
+          "example": [
+            "foodImage",
+            "userId"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "foodImage": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "example": "binary"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Food image file to analyze"
+                }
+              }
+            },
+            "userId": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "64f7d1b2c8e5f1234567890a"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "User ID for whom to create the entry"
+                }
+              }
+            },
+            "mealType": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "enum": {
+                  "type": "array",
+                  "example": [
+                    "breakfast",
+                    "lunch",
+                    "dinner",
+                    "snack",
+                    "other"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "default": {
+                  "type": "string",
+                  "example": "other"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Type of meal"
+                }
+              }
+            },
+            "consumedAt": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "example": "date-time"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "When the food was consumed (defaults to now)"
+                }
+              }
+            },
+            "confidence_threshold": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "integer"
+                },
+                "minimum": {
+                  "type": "number",
+                  "example": 1
+                },
+                "maximum": {
+                  "type": "number",
+                  "example": 10
+                },
+                "default": {
+                  "type": "number",
+                  "example": 5
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Minimum confidence level required"
+                }
+              }
+            },
+            "create_food_if_new": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "enum": {
+                  "type": "array",
+                  "example": [
+                    "true",
+                    "false"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "default": {
+                  "type": "string",
+                  "example": "true"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Whether to create a new food item if not found in database"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AICreateEntryResponse": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "consumptionEntry": {
+                      "$ref": "#/definitions/ConsumptionEntry"
+                    },
+                    "food": {
+                      "$ref": "#/definitions/Food"
+                    },
+                    "aiAnalysis": {
+                      "$ref": "#/definitions/FoodAnalysisData"
+                    },
+                    "confidence": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 7
+                        }
+                      }
+                    },
+                    "nutritionSummary": {
+                      "$ref": "#/definitions/NutritionData"
+                    }
+                  }
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Consumption entry created from image analysis"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "MultipleFoodsAnalysis": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "itemCount": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 3
+                        }
+                      }
+                    },
+                    "detectedFoods": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "array"
+                        },
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "example": "object"
+                            },
+                            "properties": {
+                              "type": "object",
+                              "properties": {
+                                "name": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "string"
+                                    },
+                                    "example": {
+                                      "type": "string",
+                                      "example": "Caesar Salad"
+                                    }
+                                  }
+                                },
+                                "portionSize": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "string"
+                                    },
+                                    "example": {
+                                      "type": "string",
+                                      "example": "200g"
+                                    }
+                                  }
+                                },
+                                "calories": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "number"
+                                    },
+                                    "example": {
+                                      "type": "number",
+                                      "example": 280
+                                    }
+                                  }
+                                },
+                                "protein": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "number"
+                                    },
+                                    "example": {
+                                      "type": "number",
+                                      "example": 20
+                                    }
+                                  }
+                                },
+                                "carbs": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "number"
+                                    },
+                                    "example": {
+                                      "type": "number",
+                                      "example": 15
+                                    }
+                                  }
+                                },
+                                "fat": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "number"
+                                    },
+                                    "example": {
+                                      "type": "number",
+                                      "example": 18
+                                    }
+                                  }
+                                },
+                                "confidence": {
+                                  "type": "object",
+                                  "properties": {
+                                    "type": {
+                                      "type": "string",
+                                      "example": "integer"
+                                    },
+                                    "example": {
+                                      "type": "number",
+                                      "example": 8
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "rawAnalysis": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Detected 3 food item(s) in image"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIMealFromImageRequest": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "required": {
+          "type": "array",
+          "example": [
+            "foodImage",
+            "userId"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "foodImage": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "example": "binary"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Food image containing multiple food items"
+                }
+              }
+            },
+            "userId": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "64f7d1b2c8e5f1234567890a"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "User ID"
+                }
+              }
+            },
+            "mealType": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "enum": {
+                  "type": "array",
+                  "example": [
+                    "breakfast",
+                    "lunch",
+                    "dinner",
+                    "snack",
+                    "other"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "default": {
+                  "type": "string",
+                  "example": "other"
+                }
+              }
+            },
+            "consumedAt": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "format": {
+                  "type": "string",
+                  "example": "date-time"
+                }
+              }
+            },
+            "mealName": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "AI Analyzed Meal"
+                },
+                "description": {
+                  "type": "string",
+                  "example": "Name for the meal containing multiple items"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIMealFromImageResponse": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "mealName": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "Lunch Combo"
+                        }
+                      }
+                    },
+                    "totalItems": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 3
+                        }
+                      }
+                    },
+                    "successfulEntries": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 3
+                        }
+                      }
+                    },
+                    "failedEntries": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 0
+                        }
+                      }
+                    },
+                    "consumptionEntries": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "array"
+                        },
+                        "items": {
+                          "$ref": "#/definitions/ConsumptionEntry"
+                        }
+                      }
+                    },
+                    "createdFoods": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "array"
+                        },
+                        "items": {
+                          "$ref": "#/definitions/Food"
+                        }
+                      }
+                    },
+                    "detectedFoods": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "array"
+                        },
+                        "items": {
+                          "$ref": "#/definitions/FoodAnalysisData"
+                        }
+                      }
+                    },
+                    "errors": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "array"
+                        },
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "type": {
+                              "type": "string",
+                              "example": "object"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Created meal with 3 items from image analysis"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "ImageTipsResponse": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "confidence": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "integer"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 6
+                }
+              }
+            },
+            "tips": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "array"
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "array",
+                  "example": [
+                    "Good image! For better accuracy, try a closer shot",
+                    "Ensure the entire dish is visible in the frame",
+                    "Place food on a plain background when possible"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "canAnalyze": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "suggestion": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Good analysis - you may proceed or take a clearer image"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIServiceStatus": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "status": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "aiImageAnalysis": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "consumptionService": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "foodService": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "geminiConfigured": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "boolean"
+                        },
+                        "example": {
+                          "type": "boolean",
+                          "example": true
+                        }
+                      }
+                    },
+                    "services": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "object"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "consumption": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "example": "object"
+                                },
+                                "properties": {
+                                  "type": "object",
+                                  "properties": {
+                                    "available": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "example": "boolean"
+                                        },
+                                        "example": {
+                                          "type": "boolean",
+                                          "example": true
+                                        }
+                                      }
+                                    },
+                                    "methods": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "example": "object"
+                                        },
+                                        "properties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "createConsumptionEntry": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "example": "boolean"
+                                                },
+                                                "example": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                                }
+                                              }
+                                            },
+                                            "getUserConsumptions": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "example": "boolean"
+                                                },
+                                                "example": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                                }
+                                              }
+                                            },
+                                            "addQuickMeal": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "example": "boolean"
+                                                },
+                                                "example": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            },
+                            "food": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "example": "object"
+                                },
+                                "properties": {
+                                  "type": "object",
+                                  "properties": {
+                                    "available": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "example": "boolean"
+                                        },
+                                        "example": {
+                                          "type": "boolean",
+                                          "example": true
+                                        }
+                                      }
+                                    },
+                                    "methods": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "example": "object"
+                                        },
+                                        "properties": {
+                                          "type": "object",
+                                          "properties": {
+                                            "createCompleteFood": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "example": "boolean"
+                                                },
+                                                "example": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                                }
+                                              }
+                                            },
+                                            "searchFoods": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "example": "boolean"
+                                                },
+                                                "example": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                                }
+                                              }
+                                            },
+                                            "getFoodById": {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "example": "boolean"
+                                                },
+                                                "example": {
+                                                  "type": "boolean",
+                                                  "example": true
+                                                }
+                                              }
+                                            }
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Service status retrieved"
+                }
+              }
+            },
+            "integration": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Production-ready with actual service methods"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIHealthStatus": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "service": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "AI Image Analysis"
+                }
+              }
+            },
+            "status": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "operational"
+                }
+              }
+            },
+            "geminiConfigured": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "supportedFormats": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "array"
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "array",
+                  "example": [
+                    "JPEG",
+                    "PNG",
+                    "WebP"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "maxFileSize": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "10MB"
+                }
+              }
+            },
+            "features": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "array"
+                },
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "type": {
+                      "type": "string",
+                      "example": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "type": "array",
+                  "example": [
+                    "Single food analysis",
+                    "Multiple food detection",
+                    "Automatic entry creation",
+                    "Meal creation from images",
+                    "Image quality tips"
+                  ],
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIStatsResponse": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "stats": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "serviceUptime": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "number"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 86400
+                        }
+                      }
+                    },
+                    "memoryUsage": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "object"
+                        },
+                        "properties": {
+                          "type": "object",
+                          "properties": {
+                            "rss": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "example": "number"
+                                }
+                              }
+                            },
+                            "heapTotal": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "example": "number"
+                                }
+                              }
+                            },
+                            "heapUsed": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "example": "number"
+                                }
+                              }
+                            },
+                            "external": {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "example": "number"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "aiModel": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "example": {
+                          "type": "string",
+                          "example": "gemini-1.5-flash"
+                        }
+                      }
+                    },
+                    "analysisEndpoints": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        },
+                        "example": {
+                          "type": "number",
+                          "example": 5
+                        }
+                      }
+                    },
+                    "lastUpdated": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        },
+                        "format": {
+                          "type": "string",
+                          "example": "date-time"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIError": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": false
+                }
+              }
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Image analysis failed"
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Could not analyze the uploaded image"
+                }
+              }
+            },
+            "code": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "AI_ANALYSIS_ERROR"
+                }
+              }
+            },
+            "details": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "object"
+                },
+                "properties": {
+                  "type": "object",
+                  "properties": {
+                    "confidence": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "integer"
+                        }
+                      }
+                    },
+                    "suggestion": {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "example": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "FileUploadError": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": false
+                }
+              }
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "File too large"
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Image file must be smaller than 10MB"
+                }
+              }
+            },
+            "code": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "FILE_SIZE_ERROR"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "AIConfigError": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": false
+                }
+              }
+            },
+            "error": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "AI service configuration error"
+                }
+              }
+            },
+            "message": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Image analysis service is not properly configured"
+                }
+              }
+            },
+            "code": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "AI_CONFIG_ERROR"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "LowConfidenceResponse": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "example": "object"
+        },
+        "properties": {
+          "type": "object",
+          "properties": {
+            "success": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "boolean"
+                },
+                "example": {
+                  "type": "boolean",
+                  "example": true
+                }
+              }
+            },
+            "data": {
+              "$ref": "#/definitions/FoodAnalysisData"
+            },
+            "warning": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Low confidence analysis"
+                }
+              }
+            },
+            "confidence": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "integer"
+                },
+                "example": {
+                  "type": "number",
+                  "example": 3
+                }
+              }
+            },
+            "suggestion": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "example": "string"
+                },
+                "example": {
+                  "type": "string",
+                  "example": "Consider taking a clearer image or manual entry"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "Error": {
       "type": "object",
       "properties": {
@@ -20671,7 +24119,7 @@
         },
         "version": {
           "type": "string",
-          "example": "2.0.0"
+          "example": "2.1.0"
         },
         "uptime": {
           "type": "number",
@@ -20694,6 +24142,23 @@
             }
           }
         },
+        "aiService": {
+          "type": "object",
+          "properties": {
+            "geminiConfigured": {
+              "type": "boolean",
+              "example": true
+            },
+            "uploadsDirectory": {
+              "type": "boolean",
+              "example": true
+            },
+            "tempDirectory": {
+              "type": "boolean",
+              "example": true
+            }
+          }
+        },
         "features": {
           "type": "object",
           "properties": {
@@ -20710,6 +24175,18 @@
               "example": true
             },
             "advancedAnalytics": {
+              "type": "boolean",
+              "example": true
+            },
+            "aiImageAnalysis": {
+              "type": "boolean",
+              "example": true
+            },
+            "aiNutritionExtraction": {
+              "type": "boolean",
+              "example": true
+            },
+            "aiMultiFoodDetection": {
               "type": "boolean",
               "example": true
             }

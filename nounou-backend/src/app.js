@@ -6,6 +6,8 @@ const rateLimit = require('express-rate-limit');
 const mongoSanitize = require('express-mongo-sanitize');
 const xss = require('xss-clean');
 const hpp = require('hpp');
+const fs = require('fs');
+const path = require('path');
 
 // ✨ AUTOMATED: Import Swagger UI only (no manual setup needed)
 const swaggerUi = require('swagger-ui-express');
@@ -22,8 +24,33 @@ const consumptionRoutes = require('./routes/consumptionRoutes');
 const foodRoutes = require('./routes/foodRoutes');
 const recipeRoutes = require('./routes/recipeRoutes');
 
+// 🤖 NEW: Import AI Image Analysis routes
+const aiConsumptionRoutes = require('./routes/aiConsumptionRoutes');
+
 // Create Express application
 const app = express();
+
+// 🤖 NEW: Create uploads directory for AI image analysis
+const createUploadsDirectory = () => {
+  const uploadsDir = path.join(__dirname, '../uploads');
+  const tempDir = path.join(uploadsDir, 'temp');
+  
+  try {
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+      console.log('✅ Created uploads directory');
+    }
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+      console.log('✅ Created uploads/temp directory');
+    }
+  } catch (error) {
+    console.warn('⚠️ Could not create uploads directory:', error.message);
+  }
+};
+
+// Create uploads directory on startup
+createUploadsDirectory();
 
 // ✨ AUTOMATED: Load auto-generated swagger documentation
 let swaggerDocument;
@@ -45,7 +72,7 @@ try {
 
 // ========== SECURITY MIDDLEWARE ==========
 
-// Set security headers - Updated for Swagger UI
+// Set security headers - Updated for Swagger UI and AI image uploads
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -110,11 +137,16 @@ app.use(xss());
 // Prevent parameter pollution
 app.use(hpp());
 
-// Global rate limiting
+// Global rate limiting with higher limits for AI endpoints
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: async (req) => {
-    // Higher limits for authenticated users
+    // Higher limits for AI endpoints due to processing time
+    if (req.path.includes('/ai/')) {
+      return req.user ? 50 : 20; // AI endpoints: 50 for auth users, 20 for anonymous
+    }
+    
+    // Regular limits for other endpoints
     if (req.user) {
       const subscriptionLimits = {
         free: 300,
@@ -155,21 +187,40 @@ app.use(express.urlencoded({
   limit: '10mb' 
 }));
 
+// 🤖 NEW: Serve uploads directory for AI processed images (optional)
+app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
+  maxAge: '1d', // Cache for 1 day
+  etag: false // Disable etag for temporary files
+}));
+
 // ========== LOGGING MIDDLEWARE ==========
 
-// Request logging
+// Request logging with AI endpoint tracking
 app.use((req, res, next) => {
   const start = Date.now();
   
   res.on('finish', () => {
     const duration = Date.now() - start;
     const logLevel = res.statusCode >= 400 ? 'error' : 'info';
+    const isAIEndpoint = req.path.includes('/ai/');
     
-    console.log(`[${logLevel.toUpperCase()}] ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms - ${req.ip}`);
+    const logMessage = `[${logLevel.toUpperCase()}] ${req.method} ${req.originalUrl} - ${res.statusCode} - ${duration}ms - ${req.ip}`;
+    
+    // Add AI analysis indicator
+    if (isAIEndpoint) {
+      console.log(`🤖 ${logMessage}`);
+    } else {
+      console.log(logMessage);
+    }
     
     // Log errors with more detail
     if (res.statusCode >= 400) {
       console.error(`Error details: User-Agent: ${req.get('User-Agent')}, Body: ${JSON.stringify(req.body)}`);
+    }
+    
+    // Log slow AI requests (>30 seconds)
+    if (isAIEndpoint && duration > 30000) {
+      console.warn(`⚠️ Slow AI request detected: ${duration}ms for ${req.originalUrl}`);
     }
   });
   
@@ -241,6 +292,13 @@ app.get('/health', async (req, res) => {
   try {
     const dbStatus = await database.healthCheck();
     
+    // 🤖 NEW: Check AI service health
+    const aiServiceHealth = {
+      geminiConfigured: !!process.env.GOOGLE_API_KEY,
+      uploadsDirectory: fs.existsSync(path.join(__dirname, '../uploads')),
+      tempDirectory: fs.existsSync(path.join(__dirname, '../uploads/temp'))
+    };
+    
     const healthCheck = {
       status: 'healthy',
       timestamp: new Date().toISOString(),
@@ -250,19 +308,29 @@ app.get('/health', async (req, res) => {
       node: process.version,
       memory: process.memoryUsage(),
       database: dbStatus,
+      
+      // 🤖 NEW: AI service status
+      aiService: aiServiceHealth,
+      
       features: {
         unifiedItemSupport: true,
         foodIntegration: true,
         recipeIntegration: true,
         advancedAnalytics: true,
         crossModuleSync: true,
-        migrationTools: true
+        migrationTools: true,
+        // 🤖 NEW: AI features
+        aiImageAnalysis: aiServiceHealth.geminiConfigured,
+        aiNutritionExtraction: aiServiceHealth.geminiConfigured,
+        aiMultiFoodDetection: aiServiceHealth.geminiConfigured
       },
       integrations: {
         foodService: true,
         recipeService: true,
         userService: true,
-        consumptionService: true
+        consumptionService: true,
+        // 🤖 NEW: AI integration
+        geminiAI: aiServiceHealth.geminiConfigured
       }
     };
 
@@ -307,7 +375,7 @@ app.get('/', (req, res) => {
     }
   */
   res.json({
-    message: 'Nounou Nutrition API - MongoDB Version',
+    message: 'Nounou Nutrition API - MongoDB Version with AI',
     version: process.env.npm_package_version || '2.0.0',
     environment: config.NODE_ENV,
     timestamp: new Date().toISOString(),
@@ -317,6 +385,8 @@ app.get('/', (req, res) => {
       consumption: '/api/v1/consumption',
       foods: '/api/v1/foods',
       recipes: '/api/v1/recipes',
+      // 🤖 NEW: AI endpoints
+      aiConsumption: '/api/v1/consumption/ai',
       docs: '/api-docs',
       'docs-json': '/api-docs.json'
     },
@@ -325,7 +395,11 @@ app.get('/', (req, res) => {
       foodDatabase: true,
       recipeManagement: true,
       advancedAnalytics: true,
-      userAuthentication: true
+      userAuthentication: true,
+      // 🤖 NEW: AI features
+      aiImageAnalysis: !!process.env.GOOGLE_API_KEY,
+      aiNutritionExtraction: !!process.env.GOOGLE_API_KEY,
+      aiMultiFoodDetection: !!process.env.GOOGLE_API_KEY
     }
   });
 });
@@ -336,9 +410,13 @@ app.get('/', (req, res) => {
 const API_VERSION = config.API_VERSION || 'v1';
 
 app.use(`/api/${API_VERSION}/users`, userRoutes);
+// 🤖 NEW: AI Image Analysis routes
+app.use(`/api/${API_VERSION}/consumption/ai`, aiConsumptionRoutes);
 app.use(`/api/${API_VERSION}/consumption`, consumptionRoutes);
 app.use(`/api/${API_VERSION}/foods`, foodRoutes);
 app.use(`/api/${API_VERSION}/recipes`, recipeRoutes);
+
+
 
 // Legacy API docs redirect
 app.get('/api/docs', (req, res) => {
@@ -350,8 +428,54 @@ app.get('/api/docs', (req, res) => {
 // 404 handler for undefined routes
 app.use('*', ErrorHandler.notFound);
 
-// Global error handler
-app.use(ErrorHandler.handle);
+// Global error handler with AI-specific error handling
+const originalErrorHandler = ErrorHandler.handle;
+app.use((error, req, res, next) => {
+  // 🤖 NEW: Handle AI-specific errors
+  if (req.path.includes('/ai/')) {
+    // Handle Gemini API errors
+    if (error.message.includes('API key')) {
+      return res.status(503).json({
+        success: false,
+        error: 'AI service configuration error',
+        message: 'Image analysis service is not properly configured',
+        code: 'AI_CONFIG_ERROR'
+      });
+    }
+    
+    // Handle image processing errors
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: 'File too large',
+        message: 'Image file must be smaller than 10MB',
+        code: 'FILE_SIZE_ERROR'
+      });
+    }
+    
+    // Handle invalid file type errors
+    if (error.message.includes('Only image files')) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid file type',
+        message: 'Please upload a valid image file (JPEG, PNG, WebP)',
+        code: 'INVALID_FILE_TYPE'
+      });
+    }
+    
+    // Log AI errors for monitoring
+    console.error('🤖 AI Service Error:', {
+      path: req.path,
+      method: req.method,
+      error: error.message,
+      stack: error.stack,
+      timestamp: new Date().toISOString()
+    });
+  }
+  
+  // Use original error handler for other errors
+  originalErrorHandler(error, req, res, next);
+});
 
 // ========== GRACEFUL SHUTDOWN ==========
 
@@ -369,11 +493,25 @@ process.on('unhandledRejection', (err) => {
   process.exit(1);
 });
 
-// Graceful shutdown
+// Graceful shutdown with cleanup
 const gracefulShutdown = async (signal) => {
   console.log(`\n🛑 Received ${signal}. Starting graceful shutdown...`);
   
   try {
+    // 🤖 NEW: Cleanup AI temporary files
+    const tempDir = path.join(__dirname, '../uploads/temp');
+    if (fs.existsSync(tempDir)) {
+      const files = fs.readdirSync(tempDir);
+      for (const file of files) {
+        try {
+          fs.unlinkSync(path.join(tempDir, file));
+        } catch (cleanupError) {
+          console.warn(`⚠️ Could not cleanup temp file ${file}:`, cleanupError.message);
+        }
+      }
+      console.log('✅ AI temporary files cleaned up');
+    }
+    
     // Close database connection
     await database.disconnect();
     console.log('✅ Database connection closed');

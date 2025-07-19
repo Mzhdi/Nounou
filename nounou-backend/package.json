@@ -10,6 +10,11 @@
         "test": "npm run swagger-gen && npm test",
         "test:watch": "jest --watch --detectOpenHandles",
         "test:coverage": "jest --coverage --detectOpenHandles",
+        "test:ai": "node test/testAIAnalysis.js",
+        "test:ai:verbose": "node test/testAIAnalysis.js --verbose",
+        "test:ai:benchmark": "node test/testAIAnalysis.js --benchmark",
+        "setup:test-data": "node test/testAIAnalysis.js --create-data",
+        "setup:ai": "node scripts/setupAI.js",
         "lint": "eslint . --ext .js",
         "lint:fix": "eslint . --ext .js --fix",
         "format": "prettier --write .",
@@ -47,7 +52,9 @@
         "ai",
         "food-tracking",
         "nutrition-api",
-        "health-app"
+        "health-app",
+        "gemini-ai",
+        "image-analysis"
     ],
     "author": {
         "name": "Nounou Team",
@@ -68,6 +75,7 @@
         "npm": ">=8.0.0"
     },
     "dependencies": {
+        "@google/generative-ai": "^0.15.0",
         "axios": "^1.6.2",
         "bcryptjs": "^2.4.3",
         "compression": "^1.7.4",
@@ -152,7 +160,8 @@
         "ignore": [
             "node_modules",
             "logs",
-            "tests"
+            "tests",
+            "uploads"
         ],
         "ext": "js,json",
         "env": {

@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 /**
- * Nounou Nutrition API Server - MongoDB Version
+ * Nounou Nutrition API Server - MongoDB Version with AI
  * 
  * Main server entry point that:
  * - Connects to MongoDB
  * - Starts the Express server
  * - Handles graceful shutdown
  * - Sets up error monitoring
+ * - Initializes AI image analysis service
  */
 
 const app = require('./src/app');
@@ -18,6 +19,32 @@ const database = require('./src/config/database');
 
 const PORT = config.PORT || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
+
+// ========== AI SERVICE HEALTH CHECK ==========
+
+function checkAIServiceHealth() {
+  const aiHealth = {
+    geminiConfigured: !!process.env.GOOGLE_API_KEY,
+    uploadsDirectoryExists: false,
+    tempDirectoryExists: false
+  };
+
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    
+    const uploadsDir = path.join(__dirname, 'uploads');
+    const tempDir = path.join(uploadsDir, 'temp');
+    
+    aiHealth.uploadsDirectoryExists = fs.existsSync(uploadsDir);
+    aiHealth.tempDirectoryExists = fs.existsSync(tempDir);
+    
+    return aiHealth;
+  } catch (error) {
+    console.warn('⚠️ Could not check AI service directories:', error.message);
+    return aiHealth;
+  }
+}
 
 // ========== DATABASE CONNECTION ==========
 
@@ -60,6 +87,9 @@ async function startServer() {
       throw new Error('Database connection required in production');
     }
     
+    // 🤖 NEW: Check AI service health
+    const aiHealth = checkAIServiceHealth();
+    
     // Start HTTP server
     const server = app.listen(PORT, HOST, () => {
       console.log('\n🚀 ========================================');
@@ -68,8 +98,16 @@ async function startServer() {
       console.log(`📍 Environment: ${config.NODE_ENV}`);
       console.log(`🌐 Server: http://${HOST}:${PORT}`);
       console.log(`🏥 Health: http://${HOST}:${PORT}/health`);
-      console.log(`📚 API Docs: http://${HOST}:${PORT}/api/docs`);
+      console.log(`📚 API Docs: http://${HOST}:${PORT}/api-docs`);
       console.log(`📊 Database: ${dbConnected ? 'Connected' : 'Disconnected'}`);
+      
+      // 🤖 NEW: Display AI service status
+      console.log(`🤖 AI Service: ${aiHealth.geminiConfigured ? 'Configured' : 'Not Configured'}`);
+      if (aiHealth.geminiConfigured) {
+        console.log(`   📁 Uploads: ${aiHealth.uploadsDirectoryExists ? 'Ready' : 'Not Found'}`);
+        console.log(`   🗂️  Temp Dir: ${aiHealth.tempDirectoryExists ? 'Ready' : 'Not Found'}`);
+      }
+      
       console.log('========================================\n');
       
       // Display available endpoints
@@ -77,7 +115,7 @@ async function startServer() {
       
       // GENERAL
       console.log(`   GET  /health`);
-      console.log(`   GET  /api/docs`);
+      console.log(`   GET  /api-docs`);
       console.log('');
       
       // ENDPOINTS USERS
@@ -103,6 +141,24 @@ async function startServer() {
       console.log(`   POST /api/v1/consumption/meals/quick`);
       console.log(`   GET  /api/v1/consumption/export`);
       console.log('');
+      
+      // 🤖 NEW: AI CONSUMPTION ENDPOINTS
+      if (aiHealth.geminiConfigured) {
+        console.log('🤖 AI Image Analysis Module:');
+        console.log(`   POST /api/v1/consumption/ai/analyze-image`);
+        console.log(`   POST /api/v1/consumption/ai/create-from-image`);
+        console.log(`   POST /api/v1/consumption/ai/analyze-multiple`);
+        console.log(`   POST /api/v1/consumption/ai/create-meal-from-image`);
+        console.log(`   POST /api/v1/consumption/ai/image-tips`);
+        console.log(`   GET  /api/v1/consumption/ai/health`);
+        console.log(`   GET  /api/v1/consumption/ai/stats`);
+        console.log('');
+      } else {
+        console.log('🤖 AI Image Analysis Module:');
+        console.log(`   ⚠️  AI endpoints disabled - GOOGLE_API_KEY not configured`);
+        console.log(`   ℹ️  Set GOOGLE_API_KEY environment variable to enable AI features`);
+        console.log('');
+      }
       
       // ENDPOINTS FOODS
       console.log('🍎 Foods Module:');
@@ -159,14 +215,35 @@ async function startServer() {
       console.log('');
       
       console.log('🎉 All modules loaded successfully!');
+      
+      // 🤖 NEW: Display AI setup instructions if not configured
+      if (!aiHealth.geminiConfigured) {
+        console.log('\n🤖 AI Setup Instructions:');
+        console.log('========================================');
+        console.log('1. Get Google Gemini API key from: https://makersuite.google.com/app/apikey');
+        console.log('2. Add to your .env file: GOOGLE_API_KEY=your_api_key_here');
+        console.log('3. Restart the server to enable AI image analysis');
+        console.log('========================================');
+      } else {
+        console.log('\n🤖 AI Image Analysis Ready!');
+        console.log('========================================');
+        console.log('✅ Users can now upload food images for automatic nutrition analysis');
+        console.log('✅ Single food detection and analysis');
+        console.log('✅ Multiple food detection in one image');
+        console.log('✅ Automatic consumption entry creation');
+        console.log('✅ Smart food matching and creation');
+        console.log('========================================');
+      }
+      
+      console.log('\n📱 Ready for requests!');
       console.log('========================================\n');
     });
     
     // Store server reference for graceful shutdown
     app.server = server;
     
-    // Set server timeout
-    server.timeout = 30000; // 30 seconds
+    // Set server timeout (increased for AI processing)
+    server.timeout = 60000; // 60 seconds for AI image processing
     
     // Handle server errors
     server.on('error', (error) => {
@@ -207,14 +284,22 @@ if (config.NODE_ENV === 'development') {
     console.warn('📍 Stack:', warning.stack);
   });
   
-  // Log memory usage periodically in development
+  // Log memory usage periodically in development (with AI monitoring)
   setInterval(() => {
     const memUsage = process.memoryUsage();
-    console.log('📊 Memory Usage:', {
-      rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
-      heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
-      heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
-      external: `${Math.round(memUsage.external / 1024 / 1024)}MB`
+    const aiHealth = checkAIServiceHealth();
+    
+    console.log('📊 System Status:', {
+      memory: {
+        rss: `${Math.round(memUsage.rss / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
+        heapUsed: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
+        external: `${Math.round(memUsage.external / 1024 / 1024)}MB`
+      },
+      ai: {
+        configured: aiHealth.geminiConfigured,
+        uploadsReady: aiHealth.uploadsDirectoryExists && aiHealth.tempDirectoryExists
+      }
     });
   }, 60000); // Every minute
 }
@@ -228,15 +313,38 @@ if (config.NODE_ENV === 'production') {
   // Disable some development features
   console.log('🔧 Production mode optimizations enabled');
   
-  // Set up process monitoring
+  // Set up process monitoring with AI metrics
   setInterval(() => {
     const usage = process.cpuUsage();
     const memUsage = process.memoryUsage();
+    const aiHealth = checkAIServiceHealth();
     
     // Log critical metrics
     if (memUsage.heapUsed > 500 * 1024 * 1024) { // > 500MB
       console.warn('⚠️ High memory usage detected:', Math.round(memUsage.heapUsed / 1024 / 1024) + 'MB');
     }
+    
+    // 🤖 NEW: Monitor AI service health in production
+    if (!aiHealth.geminiConfigured) {
+      console.warn('⚠️ AI service not configured in production - some features disabled');
+    }
+    
+    // Check for temp file buildup
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const tempDir = path.join(__dirname, 'uploads/temp');
+      
+      if (fs.existsSync(tempDir)) {
+        const files = fs.readdirSync(tempDir);
+        if (files.length > 10) {
+          console.warn(`⚠️ Many temporary files detected: ${files.length} files in temp directory`);
+        }
+      }
+    } catch (error) {
+      // Ignore monitoring errors
+    }
+    
   }, 5 * 60 * 1000); // Every 5 minutes
 }
 
@@ -250,8 +358,12 @@ if (process.env.CLUSTER_MODE === 'true') {
     console.log(`🔥 Master process ${process.pid} is running`);
     console.log(`🚀 Starting ${numCPUs} worker processes...`);
     
+    // Note: AI image processing works better with fewer workers due to memory usage
+    const maxWorkers = Math.min(numCPUs, 4);
+    console.log(`🤖 AI-optimized: Using ${maxWorkers} workers (max 4 for AI processing)`);
+    
     // Fork workers
-    for (let i = 0; i < numCPUs; i++) {
+    for (let i = 0; i < maxWorkers; i++) {
       cluster.fork();
     }
     
@@ -278,6 +390,11 @@ process.on('uncaughtException', (error) => {
   console.error('Error:', error);
   console.error('Stack:', error.stack);
   
+  // 🤖 NEW: Log if error is AI-related
+  if (error.message.includes('Gemini') || error.message.includes('AI') || error.message.includes('image')) {
+    console.error('🤖 AI-related error detected');
+  }
+  
   // In production, you might want to send this to error monitoring service
   if (config.NODE_ENV === 'production') {
     // Example: Sentry.captureException(error);
@@ -292,6 +409,11 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('💥 UNHANDLED PROMISE REJECTION!');
   console.error('Promise:', promise);
   console.error('Reason:', reason);
+  
+  // 🤖 NEW: Log if rejection is AI-related
+  if (reason && reason.message && (reason.message.includes('Gemini') || reason.message.includes('AI'))) {
+    console.error('🤖 AI-related promise rejection detected');
+  }
   
   // In production, you might want to send this to error monitoring service
   if (config.NODE_ENV === 'production') {
@@ -314,6 +436,31 @@ const gracefulShutdown = async (signal) => {
       app.server.close(() => {
         console.log('✅ HTTP server closed');
       });
+    }
+    
+    // 🤖 NEW: Cleanup AI temporary files during shutdown
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const tempDir = path.join(__dirname, 'uploads/temp');
+      
+      if (fs.existsSync(tempDir)) {
+        const files = fs.readdirSync(tempDir);
+        let cleanedFiles = 0;
+        
+        for (const file of files) {
+          try {
+            fs.unlinkSync(path.join(tempDir, file));
+            cleanedFiles++;
+          } catch (cleanupError) {
+            console.warn(`⚠️ Could not cleanup temp file ${file}:`, cleanupError.message);
+          }
+        }
+        
+        console.log(`🤖 Cleaned up ${cleanedFiles} AI temporary files`);
+      }
+    } catch (cleanupError) {
+      console.warn('⚠️ AI cleanup error:', cleanupError.message);
     }
     
     // Close database connections
@@ -348,5 +495,6 @@ process.on('SIGUSR2', () => gracefulShutdown('SIGUSR2'));
 module.exports = {
   app,
   startServer,
-  connectDatabase
+  connectDatabase,
+  checkAIServiceHealth // 🤖 NEW: Export AI health check for testing
 };
